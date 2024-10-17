@@ -1,12 +1,13 @@
 {
   "name": "viewscript-ssr",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "Alex Yuly",
   "license": "MIT",
   "main": "main.js",
   "types": "main.d.ts",
   "dependencies": {
     "jsdom": "^25.0.1",
-    "mustache": "^4.2.0"
+    "mustache": "^4.2.0",
+    "yaml": "^2.6.0"
   }
 }

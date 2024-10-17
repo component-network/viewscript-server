@@ -1,10 +1,57 @@
+const { readFile } = require("fs/promises");
+const { resolve } = require("path");
 const { JSDOM } = require("jsdom");
 const { render } = require("mustache");
+const YAML = require("yaml");
+
+const componentFsCache = new Map();
+
+exports.getComponentFromFs = async function getComponentFromFs(
+  componentDir,
+  options = {}
+) {
+  const { baseDir = "", cacheOptions = {} } = options;
+
+  if (cacheOptions.enabled) {
+    const cachedComponent = componentFsCache.get(componentDir);
+
+    if (cachedComponent) {
+      console.log(
+        "[viewscript-ssr] getComponentFromFs cache hit  for",
+        componentDir
+      );
+
+      return cachedComponent;
+    }
+
+    console.log(
+      "[viewscript-ssr] getComponentFromFs cache miss for",
+      componentDir
+    );
+  }
+
+  const templateFilePath = resolve(baseDir, componentDir, "template.html");
+  const settingsFilePath = resolve(baseDir, componentDir, "settings.yaml");
+
+  const [componentTemplate, componentSettingsSource] = await Promise.all([
+    readFile(templateFilePath, "utf8"),
+    readFile(settingsFilePath, "utf8"),
+  ]);
+
+  const componentSettings = YAML.parse(componentSettingsSource);
+  const component = { componentSettings, componentTemplate };
+
+  if (cacheOptions.enabled) {
+    componentFsCache.set(componentDir, component);
+  }
+
+  return component;
+};
 
 exports.renderComponent = async function renderComponent(
-  context,
   componentUri,
-  dataAsJson
+  dataAsJson,
+  context
 ) {
   const { componentSettings, componentTemplate } = await context.getComponent(
     componentUri,
@@ -56,9 +103,9 @@ exports.renderComponent = async function renderComponent(
             : String(componentImports[matchingImportKey]);
 
         const importRendering = await renderComponent(
-          context,
           importDir,
-          attributes
+          attributes,
+          context
         );
 
         const importDom = new JSDOM(importRendering);
