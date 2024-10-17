@@ -1,4 +1,4 @@
-export declare const renderComponent = (
+export declare function renderComponent(
   context: {
     getComponent: (componentUri: string) => Promise<{
       componentSettings: Record<string, unknown>;
@@ -7,4 +7,4 @@ export declare const renderComponent = (
   },
   componentUri: string,
   dataAsJson?: Record<string, unknown> | null
-) => string;
+): Promise<string>;
