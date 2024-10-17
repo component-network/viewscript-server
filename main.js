@@ -7,7 +7,8 @@ exports.renderComponent = async function renderComponent(
   dataAsJson
 ) {
   const { componentSettings, componentTemplate } = await context.getComponent(
-    componentUri
+    componentUri,
+    context.getComponentOptions
   );
 
   const componentData =
