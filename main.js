@@ -1,7 +1,6 @@
 const { readFile } = require("fs/promises");
 const { resolve } = require("path");
 const { JSDOM } = require("jsdom");
-const { render } = require("mustache");
 const YAML = require("yaml");
 
 const componentFsCache = new Map();
@@ -48,9 +47,102 @@ exports.getComponentFromFs = async function getComponentFromFs(
   return component;
 };
 
+function getNestedValue(obj, path) {
+  return path?.split(".").reduce((acc, key) => acc?.[key], obj);
+}
+
+function applyDataToDomElementAttributes(domElement, data) {
+  for (const attributeName in domElement.dataset) {
+    const dataSetValue = domElement.dataset[attributeName];
+    const inverted = dataSetValue.startsWith("!");
+    const boundDataSetValue = inverted ? dataSetValue.slice(1) : dataSetValue;
+    const attributeValue = getNestedValue(data, boundDataSetValue);
+
+    if (attributeName.startsWith(".")) {
+      const className = attributeName.slice(1);
+
+      if (attributeValue || inverted) {
+        domElement.classList.add(className);
+      } else {
+        domElement.classList.remove(className);
+      }
+    } else if (attributeValue || inverted) {
+      domElement.setAttribute(attributeName, attributeValue);
+    } else {
+      domElement.removeAttribute(attributeName);
+    }
+  }
+
+  for (const attributeName in domElement.dataset) {
+    delete domElement.dataset[attributeName];
+  }
+
+  for (const child of domElement.children) {
+    applyDataToDomElementAttributes(child, data);
+  }
+}
+
+function applyDataToDomElement(domElement, data) {
+  // Repeat elements with a use-for attribute
+  const rootRepeaters = domElement.querySelectorAll("[use-for]");
+
+  for (const repeater of rootRepeaters) {
+    const [itemName, collectionName] = repeater
+      .getAttribute("use-for")
+      .split(" in ");
+
+    const collectionData = getNestedValue(data, collectionName);
+
+    repeater.removeAttribute("use-for");
+
+    for (const item of collectionData) {
+      const clonedElement = repeater.cloneNode(true);
+
+      applyDataToDomElement(clonedElement, {
+        ...data,
+        [itemName]: item,
+      });
+
+      repeater.insertAdjacentElement("beforebegin", clonedElement);
+    }
+
+    repeater.remove();
+  }
+
+  // Remove elements with a use-if attribute that evaluates to false
+  const rootOptionals = domElement.querySelectorAll("[use-if]");
+
+  for (const optional of rootOptionals) {
+    const optionalName = optional.getAttribute("use-if");
+    const inverted = optionalName.startsWith("!");
+    const boundOptionalName = inverted ? optionalName.slice(1) : optionalName;
+    const optionalValue = getNestedValue(data, boundOptionalName);
+
+    if ((optionalValue && !inverted) || (!optionalValue && inverted)) {
+      optional.removeAttribute("use-if");
+    } else {
+      optional.remove();
+    }
+  }
+
+  // Replace slot elements with the data provided
+  const rootSlots = domElement.querySelectorAll("slot");
+
+  for (const slot of rootSlots) {
+    const slotName = slot.getAttribute("name");
+
+    if (slotName) {
+      const slotData = getNestedValue(data, slotName);
+      slot.replaceWith(slotData);
+    }
+  }
+
+  applyDataToDomElementAttributes(domElement, data);
+}
+
 exports.renderComponent = async function renderComponent(
   componentUri,
-  dataAsJson,
+  customData,
   context
 ) {
   const { componentSettings, componentTemplate } = await context.getComponent(
@@ -58,17 +150,20 @@ exports.renderComponent = async function renderComponent(
     context.getComponentOptions
   );
 
-  const componentData =
-    componentSettings.data && typeof componentSettings.data === "object"
-      ? componentSettings.data
-      : {};
+  const componentDom = new JSDOM(componentTemplate);
 
-  const componentRendering = render(componentTemplate, {
-    ...componentData,
-    ...dataAsJson,
+  applyDataToDomElement(componentDom.window.document, {
+    ...componentSettings.data,
+    ...customData,
   });
 
-  const rootDom = new JSDOM(componentRendering);
+  // TODO Fix inversion not working for attributes
+  // TODO Make object attributes passed into imports work
+  // TODO Fix case sensitivity issues
+  // TODO Each imported component should render in a template with a shadow root
+  // TODO Refactor component imports to use document.querySelectorAll instead of DFS
+
+  const componentImportKeys = Object.keys(componentSettings.imports);
 
   await (async function interpolate(children) {
     for (const child of children) {
@@ -76,15 +171,7 @@ exports.renderComponent = async function renderComponent(
 
       const tagName = child.tagName.toLowerCase();
 
-      const componentImports =
-        componentSettings.imports &&
-        typeof componentSettings.imports === "object"
-          ? componentSettings.imports
-          : {};
-
-      const importKeys = Object.keys(componentImports);
-
-      const matchingImportKey = importKeys.find(
+      const matchingImportKey = componentImportKeys.find(
         (importKey) => importKey.toLowerCase() === tagName
       );
 
@@ -98,9 +185,9 @@ exports.renderComponent = async function renderComponent(
         );
 
         const importDir =
-          typeof componentImports[matchingImportKey] === "string"
-            ? componentImports[matchingImportKey]
-            : String(componentImports[matchingImportKey]);
+          typeof componentSettings.imports[matchingImportKey] === "string"
+            ? componentSettings.imports[matchingImportKey]
+            : String(componentSettings.imports[matchingImportKey]);
 
         const importRendering = await renderComponent(
           importDir,
@@ -112,9 +199,7 @@ exports.renderComponent = async function renderComponent(
         const slots = importDom.window.document.querySelectorAll("slot");
 
         for (const slot of slots) {
-          if (slot.getAttribute("name") === "children") {
-            slot.replaceWith(...child.childNodes);
-          } else {
+          if (slot.hasAttribute("name")) {
             const matchingChild = Array.from(child.children).find(
               (child) =>
                 child.getAttribute("slot") === slot.getAttribute("name")
@@ -123,6 +208,8 @@ exports.renderComponent = async function renderComponent(
             if (matchingChild) {
               slot.replaceWith(matchingChild);
             }
+          } else {
+            slot.replaceWith(...child.childNodes);
           }
         }
 
@@ -131,9 +218,11 @@ exports.renderComponent = async function renderComponent(
         child.replaceWith(...importDom.window.document.body.childNodes);
       }
     }
-  })(rootDom.window.document.documentElement.children);
+  })(componentDom.window.document.documentElement.children);
 
-  const serializedDom = rootDom.serialize();
+  // TODO Apply Tailwind CSS using PostCSS, if the tailwindcss plugin is enabled
+
+  const serializedDom = componentDom.serialize();
 
   return serializedDom;
 };

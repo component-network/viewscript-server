@@ -15,7 +15,7 @@ export declare function getComponentFromFs(
 
 export declare function renderComponent<GetComponentOptions>(
   componentUri: string,
-  dataAsJson?: Record<string, unknown> | null,
+  customData: Record<string, unknown> | null | undefined,
   context: {
     getComponent(
       componentUri: string,
