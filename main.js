@@ -5,7 +5,7 @@ const YAML = require("yaml");
 
 const componentFsCache = new Map();
 
-function applyDataToDomElement(domElement, imports, data) {
+function applyDataToDomElement(domElement, data, context) {
   // Rubber-stamp elements with a use-for attribute
   const repeaters = domElement.querySelectorAll("[use-for]");
 
@@ -21,11 +21,12 @@ function applyDataToDomElement(domElement, imports, data) {
     for (const item of collectionData) {
       const clonedElement = repeater.cloneNode(true);
 
-      applyDataToDomElement(clonedElement, imports, {
+      const clonedElementData = {
         ...data,
         [itemName]: item,
-      });
+      };
 
+      applyDataToDomElement(clonedElement, clonedElementData, context);
       repeater.insertAdjacentElement("beforebegin", clonedElement);
     }
 
@@ -68,10 +69,10 @@ function applyDataToDomElement(domElement, imports, data) {
   }
 
   // Replace colon-prefixed attributes using the given data
-  applyDataToDomElementAttributes(domElement, imports, data);
+  applyDataToDomElementAttributes(domElement, data, context);
 }
 
-function applyDataToDomElementAttributes(domElement, imports, data) {
+function applyDataToDomElementAttributes(domElement, data, context) {
   const attributes = Array.from(domElement.attributes || []);
 
   for (const attribute of attributes) {
@@ -79,9 +80,9 @@ function applyDataToDomElementAttributes(domElement, imports, data) {
       const targetAttributeName = attribute.name.slice(1);
       const targetAttributeValue = getNestedValue(data, attribute.value);
 
-      const targetAttributeValueSerialized = Object.keys(imports).some(
-        (importKey) => importKey.toUpperCase() === domElement.tagName
-      )
+      const targetAttributeValueSerialized = Object.keys(
+        context.componentSettings.imports
+      ).some((importKey) => importKey.toUpperCase() === domElement.tagName)
         ? JSON.stringify(targetAttributeValue)
         : targetAttributeValue;
 
@@ -97,7 +98,7 @@ function applyDataToDomElementAttributes(domElement, imports, data) {
   }
 
   for (const child of domElement.children) {
-    applyDataToDomElementAttributes(child, imports, data);
+    applyDataToDomElementAttributes(child, data, context);
   }
 }
 
@@ -105,13 +106,13 @@ function getNestedValue(obj, path) {
   return path?.split(".").reduce((acc, key) => acc?.[key], obj);
 }
 
-async function applyImportsToDomChildren(children, componentSettings, context) {
+async function applyImportsToDomChildren(children, context) {
   for (const child of children) {
-    await applyImportsToDomChildren(child.children, componentSettings, context);
+    await applyImportsToDomChildren(child.children, context);
 
-    const matchingImportKey = Object.keys(componentSettings.imports).find(
-      (importKey) => importKey.toUpperCase() === child.tagName
-    );
+    const matchingImportKey = Object.keys(
+      context.componentSettings.imports
+    ).find((importKey) => importKey.toUpperCase() === child.tagName);
 
     if (matchingImportKey) {
       const attributes = Array.from(child.attributes).reduce(
@@ -123,9 +124,9 @@ async function applyImportsToDomChildren(children, componentSettings, context) {
       );
 
       const importDir =
-        typeof componentSettings.imports[matchingImportKey] === "string"
-          ? componentSettings.imports[matchingImportKey]
-          : String(componentSettings.imports[matchingImportKey]);
+        typeof context.componentSettings.imports[matchingImportKey] === "string"
+          ? context.componentSettings.imports[matchingImportKey]
+          : String(context.componentSettings.imports[matchingImportKey]);
 
       const importRendering = await context.renderComponent(
         importDir,
@@ -152,7 +153,6 @@ async function applyImportsToDomChildren(children, componentSettings, context) {
 
       await applyImportsToDomChildren(
         importDom.window.document.body.children,
-        componentSettings,
         context
       );
 
@@ -215,26 +215,30 @@ exports.renderComponent = async function renderComponent(
 
   const componentDom = new JSDOM(componentTemplate);
 
+  const componentDomData = {
+    ...componentSettings.data,
+    ...customData,
+  };
+
+  const componentContext = {
+    ...context,
+    renderComponent,
+    componentSettings,
+  };
+
   applyDataToDomElement(
     componentDom.window.document,
-    componentSettings.imports,
-    {
-      ...componentSettings.data,
-      ...customData,
-    }
+    componentDomData,
+    componentContext
+  );
+
+  await applyImportsToDomChildren(
+    componentDom.window.document.documentElement.children,
+    componentContext
   );
 
   // TODO Each imported component should render in a template with a shadow root
   // TODO Refactor component imports to use document.querySelectorAll instead of DFS
-
-  await applyImportsToDomChildren(
-    componentDom.window.document.documentElement.children,
-    componentSettings,
-    {
-      ...context,
-      renderComponent,
-    }
-  );
 
   // TODO Apply Tailwind CSS using PostCSS, if the tailwindcss plugin is enabled
   // TODO Support dot class name syntax
