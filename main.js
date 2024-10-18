@@ -52,29 +52,18 @@ function getNestedValue(obj, path) {
 }
 
 function applyDataToDomElementAttributes(domElement, data) {
-  for (const attributeName in domElement.dataset) {
-    const dataSetValue = domElement.dataset[attributeName];
-    const inverted = dataSetValue.startsWith("!");
-    const boundDataSetValue = inverted ? dataSetValue.slice(1) : dataSetValue;
-    const attributeValue = getNestedValue(data, boundDataSetValue);
+  const attributes = Array.from(domElement.attributes || []);
 
-    if (attributeName.startsWith(".")) {
-      const className = attributeName.slice(1);
+  for (const attribute of attributes) {
+    if (attribute.name.startsWith(":")) {
+      const targetAttributeName = attribute.name.slice(1);
+      const targetAttributeValue = getNestedValue(data, attribute.value);
 
-      if ((attributeValue && !inverted) || (!attributeValue && inverted)) {
-        domElement.classList.add(className);
-      } else {
-        domElement.classList.remove(className);
-      }
-    } else if ((attributeValue && !inverted) || (!attributeValue && inverted)) {
-      domElement.setAttribute(attributeName, attributeValue);
-    } else {
-      domElement.removeAttribute(attributeName);
+      domElement.setAttribute(targetAttributeName, targetAttributeValue);
+      domElement.removeAttribute(attribute.name);
     }
-  }
 
-  for (const attributeName in domElement.dataset) {
-    delete domElement.dataset[attributeName];
+    // TODO Support dot class name syntax
   }
 
   for (const child of domElement.children) {
@@ -157,8 +146,8 @@ exports.renderComponent = async function renderComponent(
     ...customData,
   });
 
-  // TODO Make object attributes passed into imports work
   // TODO Fix case sensitivity issues
+  // TODO Make object attributes passed into imports work
   // TODO Each imported component should render in a template with a shadow root
   // TODO Refactor component imports to use document.querySelectorAll instead of DFS
 
