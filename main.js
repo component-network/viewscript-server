@@ -122,7 +122,10 @@ function applyDataToDomElement(domElement, data) {
 
     if (slotName) {
       const slotData = getNestedValue(data, slotName);
-      slot.replaceWith(slotData);
+
+      if (slotData != null) {
+        slot.replaceWith(slotData);
+      }
     }
   }
 
@@ -166,6 +169,7 @@ exports.renderComponent = async function renderComponent(
       if (matchingImportKey) {
         const attributes = Array.from(child.attributes).reduce(
           (result, attribute) => {
+            // TODO If attribute.name begins with a colon, treat it as a data binding
             result[attribute.name] = attribute.value;
             return result;
           },
