@@ -5,84 +5,6 @@ const YAML = require("yaml");
 
 const componentFsCache = new Map();
 
-exports.getComponentFromFs = async function getComponentFromFs(
-  componentDir,
-  options = {}
-) {
-  const { baseDir = "", cacheOptions = {} } = options;
-
-  if (cacheOptions.enabled) {
-    const cachedComponent = componentFsCache.get(componentDir);
-
-    if (cachedComponent) {
-      console.log(
-        "[viewscript-ssr] getComponentFromFs cache hit  for",
-        componentDir
-      );
-
-      return cachedComponent;
-    }
-
-    console.log(
-      "[viewscript-ssr] getComponentFromFs cache miss for",
-      componentDir
-    );
-  }
-
-  const templateFilePath = resolve(baseDir, componentDir, "template.html");
-  const settingsFilePath = resolve(baseDir, componentDir, "settings.yaml");
-
-  const [componentTemplate, componentSettingsSource] = await Promise.all([
-    readFile(templateFilePath, "utf8"),
-    readFile(settingsFilePath, "utf8"),
-  ]);
-
-  const componentSettings = YAML.parse(componentSettingsSource);
-  const component = { componentSettings, componentTemplate };
-
-  if (cacheOptions.enabled) {
-    componentFsCache.set(componentDir, component);
-  }
-
-  return component;
-};
-
-function getNestedValue(obj, path) {
-  return path?.split(".").reduce((acc, key) => acc?.[key], obj);
-}
-
-function applyDataToDomElementAttributes(domElement, imports, data) {
-  const attributes = Array.from(domElement.attributes || []);
-
-  for (const attribute of attributes) {
-    if (attribute.name.startsWith(":")) {
-      const targetAttributeName = attribute.name.slice(1);
-      const targetAttributeValue = getNestedValue(data, attribute.value);
-
-      const targetAttributeValueSerialized = Object.keys(imports).some(
-        (importKey) => importKey.toUpperCase() === domElement.tagName
-      )
-        ? JSON.stringify(targetAttributeValue)
-        : targetAttributeValue;
-
-      if (targetAttributeValueSerialized != null) {
-        domElement.setAttribute(
-          targetAttributeName,
-          targetAttributeValueSerialized
-        );
-      }
-
-      domElement.removeAttribute(attribute.name);
-    }
-
-    // TODO Support dot class name syntax
-  }
-
-  for (const child of domElement.children) {
-    applyDataToDomElementAttributes(child, imports, data);
-  }
-}
-
 function applyDataToDomElement(domElement, imports, data) {
   // Repeat elements with a use-for attribute
   const rootRepeaters = domElement.querySelectorAll("[use-for]");
@@ -143,6 +65,82 @@ function applyDataToDomElement(domElement, imports, data) {
 
   applyDataToDomElementAttributes(domElement, imports, data);
 }
+
+function applyDataToDomElementAttributes(domElement, imports, data) {
+  const attributes = Array.from(domElement.attributes || []);
+
+  for (const attribute of attributes) {
+    if (attribute.name.startsWith(":")) {
+      const targetAttributeName = attribute.name.slice(1);
+      const targetAttributeValue = getNestedValue(data, attribute.value);
+
+      const targetAttributeValueSerialized = Object.keys(imports).some(
+        (importKey) => importKey.toUpperCase() === domElement.tagName
+      )
+        ? JSON.stringify(targetAttributeValue)
+        : targetAttributeValue;
+
+      if (targetAttributeValueSerialized != null) {
+        domElement.setAttribute(
+          targetAttributeName,
+          targetAttributeValueSerialized
+        );
+      }
+
+      domElement.removeAttribute(attribute.name);
+    }
+  }
+
+  for (const child of domElement.children) {
+    applyDataToDomElementAttributes(child, imports, data);
+  }
+}
+
+function getNestedValue(obj, path) {
+  return path?.split(".").reduce((acc, key) => acc?.[key], obj);
+}
+
+exports.getComponentFromFs = async function getComponentFromFs(
+  componentDir,
+  options = {}
+) {
+  const { baseDir = "", cacheOptions = {} } = options;
+
+  if (cacheOptions.enabled) {
+    const cachedComponent = componentFsCache.get(componentDir);
+
+    if (cachedComponent) {
+      console.log(
+        "[viewscript-ssr] getComponentFromFs cache hit  for",
+        componentDir
+      );
+
+      return cachedComponent;
+    }
+
+    console.log(
+      "[viewscript-ssr] getComponentFromFs cache miss for",
+      componentDir
+    );
+  }
+
+  const templateFilePath = resolve(baseDir, componentDir, "template.html");
+  const settingsFilePath = resolve(baseDir, componentDir, "settings.yaml");
+
+  const [componentTemplate, componentSettingsSource] = await Promise.all([
+    readFile(templateFilePath, "utf8"),
+    readFile(settingsFilePath, "utf8"),
+  ]);
+
+  const componentSettings = YAML.parse(componentSettingsSource);
+  const component = { componentSettings, componentTemplate };
+
+  if (cacheOptions.enabled) {
+    componentFsCache.set(componentDir, component);
+  }
+
+  return component;
+};
 
 exports.renderComponent = async function renderComponent(
   componentUri,
@@ -226,6 +224,7 @@ exports.renderComponent = async function renderComponent(
   })(componentDom.window.document.documentElement.children);
 
   // TODO Apply Tailwind CSS using PostCSS, if the tailwindcss plugin is enabled
+  // TODO Support dot class name syntax
 
   const serializedDom = componentDom.serialize();
 
