@@ -51,7 +51,7 @@ function getNestedValue(obj, path) {
   return path?.split(".").reduce((acc, key) => acc?.[key], obj);
 }
 
-function applyDataToDomElementAttributes(domElement, data) {
+function applyDataToDomElementAttributes(domElement, imports, data) {
   const attributes = Array.from(domElement.attributes || []);
 
   for (const attribute of attributes) {
@@ -59,7 +59,19 @@ function applyDataToDomElementAttributes(domElement, data) {
       const targetAttributeName = attribute.name.slice(1);
       const targetAttributeValue = getNestedValue(data, attribute.value);
 
-      domElement.setAttribute(targetAttributeName, targetAttributeValue);
+      const targetAttributeValueSerialized = Object.keys(imports).some(
+        (importKey) => importKey.toUpperCase() === domElement.tagName
+      )
+        ? JSON.stringify(targetAttributeValue)
+        : targetAttributeValue;
+
+      if (targetAttributeValueSerialized != null) {
+        domElement.setAttribute(
+          targetAttributeName,
+          targetAttributeValueSerialized
+        );
+      }
+
       domElement.removeAttribute(attribute.name);
     }
 
@@ -67,11 +79,11 @@ function applyDataToDomElementAttributes(domElement, data) {
   }
 
   for (const child of domElement.children) {
-    applyDataToDomElementAttributes(child, data);
+    applyDataToDomElementAttributes(child, imports, data);
   }
 }
 
-function applyDataToDomElement(domElement, data) {
+function applyDataToDomElement(domElement, imports, data) {
   // Repeat elements with a use-for attribute
   const rootRepeaters = domElement.querySelectorAll("[use-for]");
 
@@ -87,7 +99,7 @@ function applyDataToDomElement(domElement, data) {
     for (const item of collectionData) {
       const clonedElement = repeater.cloneNode(true);
 
-      applyDataToDomElement(clonedElement, {
+      applyDataToDomElement(clonedElement, imports, {
         ...data,
         [itemName]: item,
       });
@@ -129,7 +141,7 @@ function applyDataToDomElement(domElement, data) {
     }
   }
 
-  applyDataToDomElementAttributes(domElement, data);
+  applyDataToDomElementAttributes(domElement, imports, data);
 }
 
 exports.renderComponent = async function renderComponent(
@@ -144,13 +156,15 @@ exports.renderComponent = async function renderComponent(
 
   const componentDom = new JSDOM(componentTemplate);
 
-  applyDataToDomElement(componentDom.window.document, {
-    ...componentSettings.data,
-    ...customData,
-  });
+  applyDataToDomElement(
+    componentDom.window.document,
+    componentSettings.imports,
+    {
+      ...componentSettings.data,
+      ...customData,
+    }
+  );
 
-  // TODO Fix case sensitivity issues
-  // TODO Make object attributes passed into imports work
   // TODO Each imported component should render in a template with a shadow root
   // TODO Refactor component imports to use document.querySelectorAll instead of DFS
 
@@ -169,8 +183,7 @@ exports.renderComponent = async function renderComponent(
       if (matchingImportKey) {
         const attributes = Array.from(child.attributes).reduce(
           (result, attribute) => {
-            // TODO If attribute.name begins with a colon, treat it as a data binding
-            result[attribute.name] = attribute.value;
+            result[attribute.name] = JSON.parse(attribute.value);
             return result;
           },
           {}
@@ -183,7 +196,7 @@ exports.renderComponent = async function renderComponent(
 
         const importRendering = await renderComponent(
           importDir,
-          attributes,
+          attributes, // parse before passing to renderComponent
           context
         );
 
