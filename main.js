@@ -106,16 +106,19 @@ function getNestedValue(obj, path) {
   return path?.split(".").reduce((acc, key) => acc?.[key], obj);
 }
 
-async function applyImportsToDomChildren(children, context) {
-  for (const child of children) {
-    await applyImportsToDomChildren(child.children, context);
+async function applyImportsToDomElement(domElement, context) {
+  for (const importKey in context.componentSettings.imports) {
+    const importDir =
+      typeof context.componentSettings.imports[importKey] === "string"
+        ? context.componentSettings.imports[importKey]
+        : String(context.componentSettings.imports[importKey]);
 
-    const matchingImportKey = Object.keys(
-      context.componentSettings.imports
-    ).find((importKey) => importKey.toUpperCase() === child.tagName);
+    const importedElements = domElement.querySelectorAll(
+      importKey.toLowerCase()
+    );
 
-    if (matchingImportKey) {
-      const attributes = Array.from(child.attributes).reduce(
+    for (const importedElement of importedElements) {
+      const importedAttributes = Array.from(importedElement.attributes).reduce(
         (result, attribute) => {
           result[attribute.name] = JSON.parse(attribute.value);
           return result;
@@ -123,40 +126,32 @@ async function applyImportsToDomChildren(children, context) {
         {}
       );
 
-      const importDir =
-        typeof context.componentSettings.imports[matchingImportKey] === "string"
-          ? context.componentSettings.imports[matchingImportKey]
-          : String(context.componentSettings.imports[matchingImportKey]);
-
       const importRendering = await context.renderComponent(
         importDir,
-        attributes,
+        importedAttributes,
         context
       );
 
       const importDom = new JSDOM(importRendering);
-      const slots = importDom.window.document.querySelectorAll("slot");
+      const importSlots = importDom.window.document.querySelectorAll("slot");
 
-      for (const slot of slots) {
-        if (slot.hasAttribute("name")) {
-          const matchingChild = Array.from(child.children).find(
-            (child) => child.getAttribute("slot") === slot.getAttribute("name")
+      for (const importSlot of importSlots) {
+        if (importSlot.hasAttribute("name")) {
+          const importedChild = Array.from(importedElement.children).find(
+            (child) =>
+              child.getAttribute("slot") === importSlot.getAttribute("name")
           );
 
-          if (matchingChild) {
-            slot.replaceWith(matchingChild);
+          if (importedChild) {
+            importSlot.replaceWith(importedChild);
           }
         } else {
-          slot.replaceWith(...child.childNodes);
+          importSlot.replaceWith(...importedElement.childNodes);
         }
       }
 
-      await applyImportsToDomChildren(
-        importDom.window.document.body.children,
-        context
-      );
-
-      child.replaceWith(...importDom.window.document.body.childNodes);
+      importedElement.replaceWith(...importDom.window.document.body.childNodes);
+      await applyImportsToDomElement(importDom.window.document.body, context);
     }
   }
 }
@@ -215,7 +210,7 @@ exports.renderComponent = async function renderComponent(
 
   const componentDom = new JSDOM(componentTemplate);
 
-  const componentDomData = {
+  const componentData = {
     ...componentSettings.data,
     ...customData,
   };
@@ -228,20 +223,17 @@ exports.renderComponent = async function renderComponent(
 
   applyDataToDomElement(
     componentDom.window.document,
-    componentDomData,
+    componentData,
     componentContext
   );
 
-  await applyImportsToDomChildren(
-    componentDom.window.document.documentElement.children,
+  await applyImportsToDomElement(
+    componentDom.window.document,
     componentContext
   );
-
-  // TODO Each imported component should render in a template with a shadow root
-  // TODO Refactor component imports to use document.querySelectorAll instead of DFS
 
   // TODO Apply Tailwind CSS using PostCSS, if the tailwindcss plugin is enabled
-  // TODO Support dot class name syntax
+  // TODO Support dot class name syntax?
 
   const serializedDom = componentDom.serialize();
 
