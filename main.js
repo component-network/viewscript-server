@@ -1,9 +1,14 @@
 const { readFile } = require("fs/promises");
 const { resolve } = require("path");
 const { JSDOM } = require("jsdom");
+const postcss = require("postcss");
+const tailwindcss = require("tailwindcss");
 const YAML = require("yaml");
 
 const componentFsCache = new Map();
+
+const tailwindCssAtRules =
+  "@tailwind base; @tailwind components; @tailwind utilities";
 
 function applyDataToDomElement(domElement, data, context) {
   // Rubber-stamp elements with a use-for attribute
@@ -229,7 +234,20 @@ exports.renderComponent = async function renderComponent(
     componentContext
   );
 
-  // TODO Apply Tailwind CSS using PostCSS, if the tailwindcss plugin is enabled
+  if (componentSettings.plugins.tailwindcss) {
+    const css = await postcss([
+      tailwindcss({
+        presets: [{}],
+        content: [{ raw: componentDom.serialize() }],
+      }),
+    ]).process(tailwindCssAtRules);
+
+    const style = componentDom.window.document.createElement("style");
+    style.textContent = css;
+
+    componentDom.window.document.head.appendChild(style);
+  }
+
   // TODO Support dot class name syntax?
 
   const serializedDom = componentDom.serialize();
