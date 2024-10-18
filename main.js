@@ -108,17 +108,14 @@ function getNestedValue(obj, path) {
 
 async function applyImportsToDomElement(domElement, context) {
   for (const importKey in context.componentSettings.imports) {
-    const importDir =
-      typeof context.componentSettings.imports[importKey] === "string"
-        ? context.componentSettings.imports[importKey]
-        : String(context.componentSettings.imports[importKey]);
+    const importUri = context.componentSettings.imports[importKey];
 
     const importedElements = domElement.querySelectorAll(
       importKey.toLowerCase()
     );
 
     for (const importedElement of importedElements) {
-      const importedAttributes = Array.from(importedElement.attributes).reduce(
+      const importAttributes = Array.from(importedElement.attributes).reduce(
         (result, attribute) => {
           result[attribute.name] = JSON.parse(attribute.value);
           return result;
@@ -127,8 +124,8 @@ async function applyImportsToDomElement(domElement, context) {
       );
 
       const importRendering = await context.renderComponent(
-        importDir,
-        importedAttributes,
+        importUri,
+        importAttributes,
         context
       );
 
