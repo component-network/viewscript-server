@@ -8,7 +8,7 @@ const YAML = require("yaml");
 const componentFsCache = new Map();
 
 const tailwindCssAtRules =
-  "@tailwind base; @tailwind components; @tailwind utilities";
+  "@tailwind base; @tailwind components; @tailwind utilities;";
 
 function applyDataToDomElement(domElement, data, context) {
   // Rubber-stamp elements with a use-for attribute
@@ -237,7 +237,7 @@ exports.renderComponent = async function renderComponent(
   if (componentSettings.plugins.tailwindcss) {
     const css = await postcss([
       tailwindcss({
-        presets: [{}],
+        presets: [componentSettings.plugins.tailwindcss],
         content: [{ raw: componentDom.serialize() }],
       }),
     ]).process(tailwindCssAtRules);
