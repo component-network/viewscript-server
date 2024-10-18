@@ -61,12 +61,12 @@ function applyDataToDomElementAttributes(domElement, data) {
     if (attributeName.startsWith(".")) {
       const className = attributeName.slice(1);
 
-      if (attributeValue || inverted) {
+      if ((attributeValue && !inverted) || (!attributeValue && inverted)) {
         domElement.classList.add(className);
       } else {
         domElement.classList.remove(className);
       }
-    } else if (attributeValue || inverted) {
+    } else if ((attributeValue && !inverted) || (!attributeValue && inverted)) {
       domElement.setAttribute(attributeName, attributeValue);
     } else {
       domElement.removeAttribute(attributeName);
@@ -157,7 +157,6 @@ exports.renderComponent = async function renderComponent(
     ...customData,
   });
 
-  // TODO Fix inversion not working for attributes
   // TODO Make object attributes passed into imports work
   // TODO Fix case sensitivity issues
   // TODO Each imported component should render in a template with a shadow root
