@@ -1,55 +1,61 @@
-# ViewScript SSR
+# ViewScript Server
 
-ViewScript Server-Side Rendering
+**ViewScript** is a superset of HTML for building web apps. It can be used for content management, static site generation, and server-side rendering.
+
+**ViewScript Server** is a package you can use to build a web app with Node.js and ViewScript code.
 
 ## How to Use
 
 ### Installation
 
 ```bash
-npm i viewscript-ssr
+npm i viewscript-server
 ```
 
 ### Example Usage
 
 Rendering HTML in a Node.js app:
 
+`components/Parts/Details/template.html`
+
+```html
+<details open class="bg-white border border-gray-500 border-solid h-auto p-2 rounded-lg shadow-md">
+  <summary class="cursor-pointer font-bold overflow-hidden select-none text-ellipsis whitespace-nowrap">
+    <slot name="summary">{ Summary }</slot>
+  </summary>
+  <slot>{ Children }</slot>
+</details>
+```
+
+Please note, the "curly braces" in a slot's content have no special meaning in ViewScript. They are just stylized placeholder text for these examples.
+
+Whatever value is provided for a slot's content will be shown only if no value is provided to the component via its settings, attributes, or child nodes.
+
+`components/Parts/Details/settings.yaml`
+
+```yaml
+data: {}
+imports: {}
+plugins:
+  tailwindcss: {}
+```
+
 `components/Pages/Index/template.html`
 
 ```html
-<Heading>
-  <slot name="name">
-    (Name Goes Here)
-  </slot>
-</Heading>
+<Details summary="This is a summary of the content">
+  This is the content being summarized:
+  <slot name="custom-content">{ Custom Content }</slot>
+</Details>
 ```
 
 `components/Pages/Index/settings.yaml`
 
 ```yaml
 data:
-  name: A Custom Default Name
+  custom-content: As a content manager, I want this content to take precedence, and it does!
 imports:
-  Heading: Atoms/Heading
-plugins:
-  tailwindcss: {}
-```
-
-`components/Atoms/Heading/template.html`
-
-```html
-<p class="font-mono text-lg">
-  Hello, <slot>
-    (Children Go Here)
-  </slot>!
-</p>
-```
-
-`components/Atoms/Heading/settings.yaml`
-
-```yaml
-data: {}
-imports: {}
+  Details: Parts/Details
 plugins:
   tailwindcss: {}
 ```
@@ -71,7 +77,7 @@ const renderingContext = {
 
 export function getIndexPage(request) {
   const customData = {
-    name: request.query.name,
+    "custom-content": "As a API developer, I want this content to take precedence, and it does!"
   };
 
   return renderComponent("Pages/Index", customData, renderingContext);
