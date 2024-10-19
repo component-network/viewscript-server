@@ -1,4 +1,4 @@
-# viewscript-ssr
+# ViewScript SSR ✄
 
 ViewScript Server-Side Rendering package
 
