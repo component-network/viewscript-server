@@ -1,20 +1,84 @@
-# ViewScript SSR ✄
+# ViewScript SSR
 
-ViewScript Server-Side Rendering package
+ViewScript Server-Side Rendering
 
-## Usage
+## How to Use
 
-### NPM Installation
+### Installation
 
 ```bash
 npm i viewscript-ssr
 ```
 
-### Getting Started
+### Example Usage
 
-TODO: Write Documentation for Usage
+Rendering HTML in a Node.js app:
 
-## Development Prerequisites
+`components/Pages/Index/template.html`
+
+```html
+<Heading>
+  <slot name="name">
+    (Name Goes Here)
+  </slot>
+</Heading>
+```
+
+`components/Pages/Index/settings.yaml`
+
+```yaml
+data:
+  name: A Custom Default Name
+imports:
+  Heading: Atoms/Heading
+plugins:
+  tailwindcss: {}
+```
+
+`components/Atoms/Heading/template.html`
+
+```html
+<p class="font-mono text-lg">
+  Hello, <slot>
+    (Children Go Here)
+  </slot>!
+</p>
+```
+
+`components/Atoms/Heading/settings.yaml`
+
+```yaml
+data: {}
+imports: {}
+plugins:
+  tailwindcss: {}
+```
+
+`main.ts`
+
+```ts
+import { getComponentFromFs, renderComponent } from "viewscript-ssr";
+
+const renderingContext = {
+  getComponent: getComponentFromFs,
+  getComponentOptions: {
+    baseDir: "components",
+    cacheOptions: {
+      enabled: true,
+    },
+  },
+};
+
+export function getIndexPage(request) {
+  const customData = {
+    name: request.query.name,
+  };
+
+  return renderComponent("Pages/Index", customData, renderingContext);
+}
+```
+
+## How to Develop
 
 ### Install NPM Dependencies
 
