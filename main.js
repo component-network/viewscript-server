@@ -67,7 +67,7 @@ function applyDataToDomElement(domElement, data, context) {
     if (slotName) {
       const slotData = getNestedValue(data, slotName);
 
-      if (slotData != null) {
+      if (slotData) {
         slot.replaceWith(slotData);
       }
     }
@@ -87,13 +87,16 @@ function applyDataToDomElementAttributes(domElement, data, context) {
   for (const attribute of attributes) {
     if (attribute.name.startsWith(":")) {
       const targetAttributeName = attribute.name.slice(1);
-      const targetAttributeValue = getNestedValue(data, attribute.value);
+
+      const targetAttributeValue = attribute.value.startsWith("!")
+        ? !getNestedValue(data, attribute.value.slice(1))
+        : getNestedValue(data, attribute.value);
 
       const targetAttributeValueSerialized = isImportedElement
         ? JSON.stringify(targetAttributeValue)
         : targetAttributeValue;
 
-      if (targetAttributeValueSerialized != null) {
+      if (targetAttributeValueSerialized) {
         domElement.setAttribute(
           targetAttributeName,
           targetAttributeValueSerialized
@@ -179,7 +182,7 @@ exports.getComponentFromFs = async function getComponentFromFs(
 
     if (cachedComponent) {
       console.log(
-        "[viewscript-ssr] getComponentFromFs cache hit  for",
+        "[viewscript-server] getComponentFromFs cache hit  for",
         componentDir
       );
 
@@ -187,7 +190,7 @@ exports.getComponentFromFs = async function getComponentFromFs(
     }
 
     console.log(
-      "[viewscript-ssr] getComponentFromFs cache miss for",
+      "[viewscript-server] getComponentFromFs cache miss for",
       componentDir
     );
   }
@@ -257,8 +260,6 @@ exports.renderComponent = async function renderComponent(
 
     componentDom.window.document.head.appendChild(style);
   }
-
-  // TODO Support dot class name syntax?
 
   const serializedDom = componentDom.serialize();
 
