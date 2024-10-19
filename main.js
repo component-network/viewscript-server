@@ -158,8 +158,8 @@ async function applyImportsToDomElement(domElement, context) {
       const childrenSlots =
         importDom.window.document.querySelectorAll("slot:not([name])");
 
-      for (const importSlot of childrenSlots) {
-        importSlot.replaceWith(...importedElement.childNodes);
+      for (const childrenSlot of childrenSlots) {
+        childrenSlot.replaceWith(...importedElement.childNodes);
       }
 
       importedElement.replaceWith(...importDom.window.document.body.childNodes);
