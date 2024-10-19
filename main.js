@@ -78,6 +78,10 @@ function applyDataToDomElement(domElement, data, context) {
 }
 
 function applyDataToDomElementAttributes(domElement, data, context) {
+  const isImportedElement = Object.keys(context.componentSettings.imports).some(
+    (importKey) => importKey.toUpperCase() === domElement.tagName
+  );
+
   const attributes = Array.from(domElement.attributes || []);
 
   for (const attribute of attributes) {
@@ -85,9 +89,7 @@ function applyDataToDomElementAttributes(domElement, data, context) {
       const targetAttributeName = attribute.name.slice(1);
       const targetAttributeValue = getNestedValue(data, attribute.value);
 
-      const targetAttributeValueSerialized = Object.keys(
-        context.componentSettings.imports
-      ).some((importKey) => importKey.toUpperCase() === domElement.tagName)
+      const targetAttributeValueSerialized = isImportedElement
         ? JSON.stringify(targetAttributeValue)
         : targetAttributeValue;
 
@@ -99,6 +101,9 @@ function applyDataToDomElementAttributes(domElement, data, context) {
       }
 
       domElement.removeAttribute(attribute.name);
+    } else if (isImportedElement) {
+      const attributeValueSerialized = JSON.stringify(attribute.value);
+      domElement.setAttribute(attribute.name, attributeValueSerialized);
     }
   }
 
