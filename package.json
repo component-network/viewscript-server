@@ -1,6 +1,6 @@
 {
-  "name": "viewscript-ssr",
-  "version": "1.0.1",
+  "name": "viewscript-server",
+  "version": "1.0.2",
   "author": "Alex Yuly",
   "license": "MIT",
   "main": "main.js",
