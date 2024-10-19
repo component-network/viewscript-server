@@ -140,21 +140,26 @@ async function applyImportsToDomElement(domElement, context) {
       );
 
       const importDom = new JSDOM(importRendering);
-      const importSlots = importDom.window.document.querySelectorAll("slot");
 
-      for (const importSlot of importSlots) {
-        if (importSlot.hasAttribute("name")) {
-          const importedChild = Array.from(importedElement.children).find(
-            (child) =>
-              child.getAttribute("slot") === importSlot.getAttribute("name")
-          );
+      const namedSlots =
+        importDom.window.document.querySelectorAll("slot[name]");
 
-          if (importedChild) {
-            importSlot.replaceWith(importedChild);
-          }
-        } else {
-          importSlot.replaceWith(...importedElement.childNodes);
+      for (const namedSlot of namedSlots) {
+        const importedChild = Array.from(importedElement.children).find(
+          (child) =>
+            child.getAttribute("slot") === namedSlot.getAttribute("name")
+        );
+
+        if (importedChild) {
+          namedSlot.replaceWith(importedChild);
         }
+      }
+
+      const childrenSlots =
+        importDom.window.document.querySelectorAll("slot:not([name])");
+
+      for (const importSlot of childrenSlots) {
+        importSlot.replaceWith(...importedElement.childNodes);
       }
 
       importedElement.replaceWith(...importDom.window.document.body.childNodes);
