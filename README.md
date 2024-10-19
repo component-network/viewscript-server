@@ -30,8 +30,13 @@ plugins:
 `components/Parts/Details/template.html`
 
 ```html
-<details open class="bg-white border border-gray-500 border-solid h-auto p-2 rounded-lg shadow-md">
-  <summary class="cursor-pointer font-bold overflow-hidden select-none text-ellipsis whitespace-nowrap">
+<details
+  open
+  class="bg-white border border-gray-500 border-solid h-auto p-2 rounded-lg shadow-md"
+>
+  <summary
+    class="cursor-pointer font-bold overflow-hidden select-none text-ellipsis whitespace-nowrap"
+  >
     <slot name="summary">{ Summary }</slot>
   </summary>
   <slot>{ Children }</slot>
@@ -54,16 +59,16 @@ plugins:
 `components/Pages/Index/template.html`
 
 ```html
-<Details summary="This is a summary of the content">
+<details summary="This is a summary of the content">
   This is the content being summarized:
   <slot name="custom-content">{ Custom Content }</slot>
-</Details>
+</details>
 ```
 
 `main.ts`
 
 ```ts
-import { getComponentFromFs, renderComponent } from "viewscript-ssr";
+import { getComponentFromFs, renderComponent } from "viewscript-server";
 
 const renderingContext = {
   getComponent: getComponentFromFs,
@@ -77,7 +82,8 @@ const renderingContext = {
 
 export function getIndexPage(request) {
   const customData = {
-    "custom-content": "As a API developer, I want this content to take precedence, and it does!"
+    "custom-content":
+      "As a API developer, I want this content to take precedence, and it does!",
   };
 
   return renderComponent("Pages/Index", customData, renderingContext);
@@ -107,7 +113,7 @@ npm link
 Then, in the root of another repository:
 
 ```bash
-npm link viewscript-ssr
+npm link viewscript-server
 ```
 
 ## Publishing to NPM
