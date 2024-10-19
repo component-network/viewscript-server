@@ -1,8 +1,10 @@
 # ViewScript Server
 
-**ViewScript** is a superset of HTML for building web apps. It can be used for content management, static site generation, and server-side rendering.
-
 **ViewScript Server** is a package you can use to build a web app with Node.js and ViewScript code.
+
+## What is ViewScript?
+
+**ViewScript** is a superset of HTML for building web apps. It can be used for content management, static site generation, and server-side rendering.
 
 ## How to Use
 
@@ -16,6 +18,15 @@ npm i viewscript-server
 
 Rendering HTML in a Node.js app:
 
+`components/Parts/Details/settings.yaml`
+
+```yaml
+data: {}
+imports: {}
+plugins:
+  tailwindcss: {}
+```
+
 `components/Parts/Details/template.html`
 
 ```html
@@ -27,15 +38,15 @@ Rendering HTML in a Node.js app:
 </details>
 ```
 
-Please note, the "curly braces" in a slot's content have no special meaning in ViewScript. They are just stylized placeholder text for these examples.
+The "curly braces" in a slot's content have no special meaning in ViewScript. They are just stylized placeholder text for these examples. Whatever value is provided for a slot's content will be shown only if no value is provided to the component via its settings, attributes, or child nodes.
 
-Whatever value is provided for a slot's content will be shown only if no value is provided to the component via its settings, attributes, or child nodes.
-
-`components/Parts/Details/settings.yaml`
+`components/Pages/Index/settings.yaml`
 
 ```yaml
-data: {}
-imports: {}
+data:
+  custom-content: As a content manager, I want this content to take precedence, and it does!
+imports:
+  Details: Parts/Details
 plugins:
   tailwindcss: {}
 ```
@@ -47,17 +58,6 @@ plugins:
   This is the content being summarized:
   <slot name="custom-content">{ Custom Content }</slot>
 </Details>
-```
-
-`components/Pages/Index/settings.yaml`
-
-```yaml
-data:
-  custom-content: As a content manager, I want this content to take precedence, and it does!
-imports:
-  Details: Parts/Details
-plugins:
-  tailwindcss: {}
 ```
 
 `main.ts`
