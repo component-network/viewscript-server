@@ -2,19 +2,17 @@
 
 ViewScript Server-Side Rendering package
 
-## Purpose
+## Usage
 
-This package uses a provided `getComponent` resolver function to render a ViewScript component, using the provided JSON data.
-
-A ViewScript component consists of two parts:
-- `componentTemplate`: a string containing a template that [mustache.js](https://github.com/janl/mustache.js) may parse into valid HTML
-- `componentSettings`: a JSON object with optional default `data` (passed to mustache.js) and component `imports` (recursively rendered and replaced into the templated HTML)
-
-## NPM Installation
+### NPM Installation
 
 ```bash
 npm i viewscript-ssr
 ```
+
+### Getting Started
+
+TODO: Write Documentation for Usage
 
 ## Development Prerequisites
 

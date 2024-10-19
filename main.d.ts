@@ -1,3 +1,11 @@
+export interface ComponentSettings {
+  data: Record<string, unknown>;
+  imports: Record<string, string>;
+  plugins: {
+    tailwindcss?: Record<string, unknown>;
+  };
+}
+
 export interface GetComponentFromFsOptions {
   baseDir?: string;
   cacheOptions?: {
@@ -9,7 +17,7 @@ export declare function getComponentFromFs(
   componentDir: string,
   options?: GetComponentFromFsOptions
 ): Promise<{
-  componentSettings: Record<string, unknown>;
+  componentSettings: ComponentSettings;
   componentTemplate: string;
 }>;
 
@@ -21,9 +29,11 @@ export declare function renderComponent<GetComponentOptions>(
       componentUri: string,
       options?: GetComponentOptions
     ): Promise<{
-      componentSettings: Record<string, unknown>;
+      componentSettings: ComponentSettings;
       componentTemplate: string;
     }>;
     getComponentOptions?: GetComponentOptions;
+    renderComponent?: typeof renderComponent;
+    componentSettings?: ComponentSettings;
   }
 ): Promise<string>;
