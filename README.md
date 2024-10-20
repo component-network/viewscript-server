@@ -6,6 +6,14 @@
 
 **ViewScript** is a superset of HTML for building web apps with components. It can be used for content management, static site generation, and server-side rendering.
 
+ViewScript is inspired by ideas from web components and Vue.js.
+
+It uses [`jsdom`](https://github.com/jsdom/jsdom) to parse and serialize ViewScript HTML templates. JSDOM provides a simulated DOM API that runs in Node.js.
+
+It uses [`yaml`](https://github.com/eemeli/yaml) to parse ViewScript YAML settings. YAML is a superset of JSON that many people prefer to use for configuration files.
+
+It uses [`postcss`](https://github.com/postcss/postcss) and [`tailwindcss`](https://github.com/tailwindlabs/tailwindcss) to support Tailwind CSS as an optional plugin.
+
 ## How to Use
 
 ### Installation
@@ -18,7 +26,7 @@ npm i viewscript-server
 
 Rendering HTML in a Node.js app:
 
-`components/Parts/Details/settings.yaml`
+`components/parts/details/settings.yaml`
 
 ```yaml
 data: {}
@@ -27,7 +35,7 @@ plugins:
   tailwindcss: {}
 ```
 
-`components/Parts/Details/template.html`
+`components/parts/details/template.html`
 
 ```html
 <details
@@ -45,24 +53,24 @@ plugins:
 
 The "curly braces" in a slot's content have no special meaning in ViewScript. They are just stylized placeholder text for these examples. Whatever value is provided for a slot's content will be shown only if no value is provided to the component via its settings, attributes, or child nodes.
 
-`components/Pages/Index/settings.yaml`
+`components/pages/index/settings.yaml`
 
 ```yaml
 data:
   custom-content: As a content manager, I want this content to take precedence, and it does!
 imports:
-  Details: Parts/Details
+  custom-details: parts/details
 plugins:
   tailwindcss: {}
 ```
 
-`components/Pages/Index/template.html`
+`components/pages/index/template.html`
 
 ```html
-<details summary="This is a summary of the content">
+<custom-details summary="This is a summary of the content">
   This is the content being summarized:
   <slot name="custom-content">{ Custom Content }</slot>
-</details>
+</custom-details>
 ```
 
 `main.ts`
@@ -86,7 +94,7 @@ export function getIndexPage(request) {
       "As a API developer, I want this content to take precedence, and it does!",
   };
 
-  return renderComponent("Pages/Index", customData, renderingContext);
+  return renderComponent("pages/index", customData, renderingContext);
 }
 ```
 
