@@ -165,6 +165,7 @@ async function applyImportsToDomElement(domElement, context) {
         childrenSlot.replaceWith(...importedElement.childNodes);
       }
 
+      domElement.head?.append(...importDom.window.document.head.childNodes);
       importedElement.replaceWith(...importDom.window.document.body.childNodes);
       await applyImportsToDomElement(importDom.window.document.body, context);
     }
