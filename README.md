@@ -1,16 +1,14 @@
 # ViewScript Server
 
-**ViewScript Server** is a package you can use to build a web app with Node.js and ViewScript code.
+**ViewScript Server** is a package you can use to build a web app with Node.js and ViewScript components.
 
 ## What is ViewScript?
 
-**ViewScript** is a superset of HTML for building web apps with components. It can be used for content management, static site generation, and server-side rendering.
+**ViewScript** is a system for building components with HTML and YAML files that have special syntax for processing data, imports, and plugins. You can use it for static content management, static site generation, and dynamic server-side rendering via an API.
 
-ViewScript is inspired by ideas from web components and Vue.js.
+It uses [`jsdom`](https://github.com/jsdom/jsdom) to parse and serialize ViewScript HTML templates. JSDOM provides a simulated web browser DOM API that runs in Node.js.
 
-It uses [`jsdom`](https://github.com/jsdom/jsdom) to parse and serialize ViewScript HTML templates. JSDOM provides a simulated DOM API that runs in Node.js.
-
-It uses [`yaml`](https://github.com/eemeli/yaml) to parse ViewScript YAML settings. YAML is a superset of JSON that many people prefer to use for configuration files.
+It uses [`yaml`](https://github.com/eemeli/yaml) to parse ViewScript YAML settings. YAML is compatible with JSON, but it has a syntax more like Python, and some people prefer it for configuration files.
 
 It uses [`postcss`](https://github.com/postcss/postcss) and [`tailwindcss`](https://github.com/tailwindlabs/tailwindcss) to support Tailwind CSS as an optional plugin.
 
@@ -51,7 +49,7 @@ plugins:
 </details>
 ```
 
-The "curly braces" in a slot's content have no special meaning in ViewScript. They are just stylized placeholder text for these examples. Whatever value is provided for a slot's content will be shown only if no value is provided to the component via its settings, attributes, or child nodes.
+The "curly braces" in a slot's content have no special meaning in ViewScript. They are just stylized placeholder text for these examples. ViewScript will render the value provided for a slot's content only if no value is provided to the component via its settings, attributes, or child nodes.
 
 `components/pages/index/settings.yaml`
 
