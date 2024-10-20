@@ -4,7 +4,7 @@
 
 ## What is ViewScript?
 
-**ViewScript** is a superset of HTML for building web apps. It can be used for content management, static site generation, and server-side rendering.
+**ViewScript** is a superset of HTML for building web apps with components. It can be used for content management, static site generation, and server-side rendering.
 
 ## How to Use
 
