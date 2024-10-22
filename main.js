@@ -10,7 +10,7 @@ const getComponentFromFsCache = new Map();
 const tailwindCssAtRules =
   "@tailwind base; @tailwind components; @tailwind utilities;";
 
-function getComponentData(data, when) {
+function setupComponentData(data, when) {
   if (data.style && typeof data.style === "string") {
     data.style = data.style.split(";").reduce((acc, style) => {
       const [key, value] = style.split(":").map((s) => s.trim());
@@ -23,8 +23,6 @@ function getComponentData(data, when) {
     Object.entries(when).forEach(([conditionalKey, conditionalValue]) => {
       Object.entries(conditionalValue).forEach(([dataKey, dataValue]) => {
         const condition = getNestedValue(data, conditionalKey);
-        console.log(`Got condition ${conditionalKey}:`, condition);
-
         if (condition) {
           if (dataKey === "style") {
             Object.entries(dataValue).forEach(([styleKey, styleValue]) => {
@@ -267,11 +265,11 @@ exports.renderComponent = async function renderComponent(
   const componentDom = new JSDOM(componentTemplate);
 
   const baseData = {
-    ...componentSettings.data,
+    ...structuredClone(componentSettings.data),
     ...customData,
   };
 
-  const componentData = getComponentData(baseData, componentSettings.when);
+  const componentData = setupComponentData(baseData, componentSettings.when);
 
   const componentContext = {
     ...context,
