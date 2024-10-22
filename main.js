@@ -5,48 +5,46 @@ const postcss = require("postcss");
 const tailwindcss = require("tailwindcss");
 const YAML = require("yaml");
 
-const componentFsCache = new Map();
+const getComponentFromFsCache = new Map();
 
 const tailwindCssAtRules =
   "@tailwind base; @tailwind components; @tailwind utilities;";
 
-function getBaseData(componentSettings) {
-  if (componentSettings.data.style && typeof componentSettings.data.style === "string") {
-    componentSettings.data.style = componentSettings.data.style
-      .split(";")
-      .reduce((acc, style) => {
-        const [key, value] = style.split(":").map((s) => s.trim());
-        acc[key] = value;
-        return acc;
-      }, {});
+function getComponentData(data, when) {
+  if (data.style && typeof data.style === "string") {
+    data.style = data.style.split(";").reduce((acc, style) => {
+      const [key, value] = style.split(":").map((s) => s.trim());
+      acc[key] = value;
+      return acc;
+    }, {});
   }
 
-  if (componentSettings.when) {
-    Object.entries(componentSettings.when).forEach(
-      ([conditionalKey, conditionalValue]) => {
-        Object.entries(conditionalValue).forEach(([dataKey, dataValue]) => {
-          const condition = getNestedValue(componentSettings.data, conditionalKey);
-          if (condition) {
-            if (dataKey === "style") {
-              Object.entries(dataValue).forEach(([styleKey, styleValue]) => {
-                componentSettings.data.style[styleKey] = styleValue;
-              });
-            } else {
-              componentSettings.data[dataKey] = dataValue;
-            }
+  if (when) {
+    Object.entries(when).forEach(([conditionalKey, conditionalValue]) => {
+      Object.entries(conditionalValue).forEach(([dataKey, dataValue]) => {
+        const condition = getNestedValue(data, conditionalKey);
+        console.log(`Got condition ${conditionalKey}:`, condition);
+
+        if (condition) {
+          if (dataKey === "style") {
+            Object.entries(dataValue).forEach(([styleKey, styleValue]) => {
+              data.style[styleKey] = styleValue;
+            });
+          } else {
+            data[dataKey] = dataValue;
           }
-        });
-      }
-    );
+        }
+      });
+    });
   }
 
-  if (componentSettings.data.style && typeof componentSettings.data.style === "object") {
-    componentSettings.data.style = Object.entries(componentSettings.data.style)
+  if (data.style && typeof data.style === "object") {
+    data.style = Object.entries(data.style)
       .map(([key, value]) => `${key}: ${value}`)
       .join("; ");
   }
 
-  return componentSettings.data;
+  return data;
 }
 
 function applyDataToDomElement(domElement, data, context) {
@@ -204,15 +202,7 @@ async function applyImportsToDomElement(domElement, context) {
         childrenSlot.replaceWith(...importedElement.childNodes);
       }
 
-      importDom.window.document.head.childNodes.forEach((child) => {
-        if (
-          (child.tagName === "LINK" &&
-            !domElement.head.querySelector(`link[href="${child.href}"]`))
-        ) {
-          domElement.head.appendChild(child);
-        }
-      });
-
+      domElement.head.append(...importDom.window.document.head.childNodes);
       importedElement.replaceWith(...importDom.window.document.body.childNodes);
       await applyImportsToDomElement(importDom.window.document.body, context);
     }
@@ -226,20 +216,18 @@ exports.getComponentFromFs = async function getComponentFromFs(
   const { baseDir = "", cacheOptions = {} } = options;
 
   if (cacheOptions.enabled) {
-    const cachedComponent = componentFsCache.get(componentDir);
+    const cachedComponent = getComponentFromFsCache.get(componentDir);
 
     if (cachedComponent) {
       console.log(
-        "[viewscript-server] getComponentFromFs cache hit  for",
-        componentDir
+        `[viewscript-server] getComponentFromFs ${componentDir} from cache`
       );
 
       return cachedComponent;
     }
 
     console.log(
-      "[viewscript-server] getComponentFromFs cache miss for",
-      componentDir
+      `[viewscript-server] getComponentFromFs ${componentDir} from disk`
     );
   }
 
@@ -255,7 +243,7 @@ exports.getComponentFromFs = async function getComponentFromFs(
   const component = { componentSettings, componentTemplate };
 
   if (cacheOptions.enabled) {
-    componentFsCache.set(componentDir, component);
+    getComponentFromFsCache.set(componentDir, component);
   }
 
   return component;
@@ -271,12 +259,19 @@ exports.renderComponent = async function renderComponent(
     context.getComponentOptions
   );
 
+  console.log(
+    `[viewscript-server] renderComponent    ${componentUri} with`,
+    customData
+  );
+
   const componentDom = new JSDOM(componentTemplate);
 
-  const componentData = {
-    ...getBaseData(componentSettings),
+  const baseData = {
+    ...componentSettings.data,
     ...customData,
   };
+
+  const componentData = getComponentData(baseData, componentSettings.when);
 
   const componentContext = {
     ...context,
