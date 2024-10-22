@@ -122,10 +122,15 @@ function applyDataToDomElementAttributes(domElement, data, context) {
   for (const attribute of attributes) {
     if (attribute.name.startsWith(":")) {
       const targetAttributeName = attribute.name.slice(1);
+      const inverted = attribute.value.startsWith("!");
 
-      const targetAttributeValue = attribute.value.startsWith("!")
-        ? !getNestedValue(data, attribute.value.slice(1))
-        : getNestedValue(data, attribute.value);
+      let attributeValue =
+        (inverted ? attribute.value.slice(1) : attribute.value) ||
+        targetAttributeName;
+
+      const targetAttributeValue = inverted
+        ? !getNestedValue(data, attributeValue)
+        : getNestedValue(data, attributeValue);
 
       const targetAttributeValueSerialized = isImportedElement
         ? JSON.stringify(targetAttributeValue)
@@ -306,7 +311,3 @@ exports.renderComponent = async function renderComponent(
 
   return serializedDom;
 };
-
-// TODO When loading scripts (main.ts in each component folder)...
-// TODO Generate an id, and pass it to the template and this class' constructor.
-// TODO Wrap the class instantiation in document.addEventListener("DOMContentLoaded", () => { ... })
