@@ -10,6 +10,45 @@ const componentFsCache = new Map();
 const tailwindCssAtRules =
   "@tailwind base; @tailwind components; @tailwind utilities;";
 
+function getBaseData(componentSettings) {
+  if (componentSettings.data.style && typeof componentSettings.data.style === "string") {
+    componentSettings.data.style = componentSettings.data.style
+      .split(";")
+      .reduce((acc, style) => {
+        const [key, value] = style.split(":").map((s) => s.trim());
+        acc[key] = value;
+        return acc;
+      }, {});
+  }
+
+  if (componentSettings.when) {
+    Object.entries(componentSettings.when).forEach(
+      ([conditionalKey, conditionalValue]) => {
+        Object.entries(conditionalValue).forEach(([dataKey, dataValue]) => {
+          const condition = getNestedValue(componentSettings.data, conditionalKey);
+          if (condition) {
+            if (dataKey === "style") {
+              Object.entries(dataValue).forEach(([styleKey, styleValue]) => {
+                componentSettings.data.style[styleKey] = styleValue;
+              });
+            } else {
+              componentSettings.data[dataKey] = dataValue;
+            }
+          }
+        });
+      }
+    );
+  }
+
+  if (componentSettings.data.style && typeof componentSettings.data.style === "object") {
+    componentSettings.data.style = Object.entries(componentSettings.data.style)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join("; ");
+  }
+
+  return componentSettings.data;
+}
+
 function applyDataToDomElement(domElement, data, context) {
   // Rubber-stamp elements with a use-for attribute
   const repeaters = domElement.querySelectorAll("[use-for]");
@@ -165,7 +204,15 @@ async function applyImportsToDomElement(domElement, context) {
         childrenSlot.replaceWith(...importedElement.childNodes);
       }
 
-      domElement.head?.append(...importDom.window.document.head.childNodes);
+      importDom.window.document.head.childNodes.forEach((child) => {
+        if (
+          (child.tagName === "LINK" &&
+            !domElement.head.querySelector(`link[href="${child.href}"]`))
+        ) {
+          domElement.head.appendChild(child);
+        }
+      });
+
       importedElement.replaceWith(...importDom.window.document.body.childNodes);
       await applyImportsToDomElement(importDom.window.document.body, context);
     }
@@ -227,7 +274,7 @@ exports.renderComponent = async function renderComponent(
   const componentDom = new JSDOM(componentTemplate);
 
   const componentData = {
-    ...componentSettings.data,
+    ...getBaseData(componentSettings),
     ...customData,
   };
 
@@ -266,3 +313,7 @@ exports.renderComponent = async function renderComponent(
 
   return serializedDom;
 };
+
+// TODO When loading scripts (main.ts in each component folder)...
+// TODO Generate an id, and pass it to the template and this class' constructor.
+// TODO Wrap the class instantiation in document.addEventListener("DOMContentLoaded", () => { ... })
