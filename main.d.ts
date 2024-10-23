@@ -19,7 +19,7 @@ export declare function getComponentFromFs(
 ): Promise<{
   componentSettings: ComponentSettings;
   componentTemplate: string;
-  componentUpgrades?: string;
+  componentEnhancements?: string;
 }>;
 
 export declare function renderComponent<GetComponentOptions>(

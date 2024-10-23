@@ -1,9 +1,10 @@
-const { createHash, randomUUID } = require("crypto");
+const { randomUUID } = require("crypto");
 const { readFile } = require("fs/promises");
 const { resolve } = require("path");
 const { JSDOM } = require("jsdom");
 const postcss = require("postcss");
 const tailwindcss = require("tailwindcss");
+const { minify } = require("terser");
 const typescript = require("typescript");
 const YAML = require("yaml");
 
@@ -208,35 +209,39 @@ async function applyImportsToDomElement(domElement, context) {
         childrenSlot.replaceWith(...importedElement.childNodes);
       }
 
-      Array.from(importDom.window.document.head.childNodes).forEach((child) => {
+      Array.from(importDom.window.document.head.children).forEach((child) => {
         if (child.tagName === "LINK") {
           if (
-            !child.href ||
             !Array.from(
-              context.rootDom.window.document.querySelectorAll("link")
-            ).some((link) => link.href === child.href)
+              context.rootDom.window.document.head.querySelectorAll("link")
+            ).some((link) => link.href && link.href === child.href)
           ) {
-            context.rootDom.window.document.head.append(child);
+            context.rootDom.window.document.head.appendChild(child);
           }
         } else if (child.tagName === "SCRIPT") {
+          const allHeadScripts = Array.from(
+            context.rootDom.window.document.head.querySelectorAll("script")
+          );
+
           if (
-            !child.src ||
-            !Array.from(
-              context.rootDom.window.document.querySelectorAll("script")
-            ).some((script) => script.src === child.src)
+            !allHeadScripts.some(
+              (script) =>
+                (script.id && script.id === child.id) ||
+                (script.src && script.src === child.src)
+            )
           ) {
-            context.rootDom.window.document.head.append(child);
+            context.rootDom.window.document.head.appendChild(child);
           }
         } else if (child.tagName === "STYLE") {
           if (
             !Array.from(
-              context.rootDom.window.document.querySelectorAll("style")
+              context.rootDom.window.document.head.querySelectorAll("style")
             ).some((style) => style.textContent === child.textContent)
           ) {
-            context.rootDom.window.document.head.append(child);
+            context.rootDom.window.document.head.appendChild(child);
           }
         } else {
-          context.rootDom.window.document.head.append(child);
+          context.rootDom.window.document.head.appendChild(child);
         }
       });
 
@@ -270,17 +275,25 @@ exports.getComponentFromFs = async function getComponentFromFs(
 
   const settingsFilePath = resolve(baseDir, componentDir, "settings.yaml");
   const templateFilePath = resolve(baseDir, componentDir, "template.html");
-  const upgradesFilePath = resolve(baseDir, componentDir, "upgrades.ts");
+  const enhancementsFilePath = resolve(
+    baseDir,
+    componentDir,
+    "enhancements.ts"
+  );
 
-  const [componentSettingsSource, componentTemplate, componentUpgrades] =
+  const [componentSettingsSource, componentTemplate, componentEnhancements] =
     await Promise.all([
       readFile(settingsFilePath, "utf8"),
       readFile(templateFilePath, "utf8"),
-      readFile(upgradesFilePath, "utf8").catch(() => null),
+      readFile(enhancementsFilePath, "utf8").catch(() => null),
     ]);
 
   const componentSettings = YAML.parse(componentSettingsSource);
-  const component = { componentSettings, componentTemplate, componentUpgrades };
+  const component = {
+    componentSettings,
+    componentTemplate,
+    componentEnhancements,
+  };
 
   if (cacheOptions.enabled) {
     getComponentFromFsCache.set(componentDir, component);
@@ -304,7 +317,7 @@ exports.renderComponent = async function renderComponent(
     renderComponentCache.set(componentUri, componentMetadata);
   }
 
-  const { componentSettings, componentTemplate, componentUpgrades } =
+  const { componentSettings, componentTemplate, componentEnhancements } =
     await context.getComponent(componentUri, context.getComponentOptions);
 
   const componentDom = new JSDOM(componentTemplate);
@@ -337,13 +350,9 @@ exports.renderComponent = async function renderComponent(
     componentContext
   );
 
-  if (componentUpgrades) {
-    if (
-      !componentContext.rootDom.window.document.querySelector(
-        `script[id="${componentMetadata.uuid}"]`
-      )
-    ) {
-      const compiledScript = typescript.transpileModule(componentUpgrades, {
+  if (componentEnhancements) {
+    if (!componentContext.rootDom.window[componentMetadata.uuid]) {
+      const compiledScript = typescript.transpileModule(componentEnhancements, {
         compilerOptions: { module: typescript.ModuleKind.None },
       });
 
@@ -353,10 +362,14 @@ exports.renderComponent = async function renderComponent(
 
         scriptElement.id = componentMetadata.uuid;
 
-        scriptElement.textContent = `globalThis.ViewScript = globalThis.ViewScript || {components:{}};
+        const minifiedScript = await minify(`
+globalThis.ViewScript = globalThis.ViewScript || { components: {} };
 globalThis.ViewScript.components["${componentMetadata.uuid}"] = {};
-(function (exports) {
-${compiledScript.outputText}})(globalThis.ViewScript.components["${componentMetadata.uuid}"]);`;
+(function (exports) { ${compiledScript.outputText} })(
+  globalThis.ViewScript.components["${componentMetadata.uuid}"]
+);`);
+
+        scriptElement.textContent = minifiedScript.code;
 
         componentContext.rootDom.window.document.head.appendChild(
           scriptElement
@@ -369,9 +382,12 @@ ${compiledScript.outputText}})(globalThis.ViewScript.components["${componentMeta
 
     const scriptData = JSON.stringify(componentDataWithId);
 
-    scriptElement.textContent = `addEventListener("DOMContentLoaded", function () {
+    const minifiedScript = await minify(`
+addEventListener("DOMContentLoaded", function () {
   new (globalThis.ViewScript.components["${componentMetadata.uuid}"].default)(${scriptData});
-});`;
+});`);
+
+    scriptElement.textContent = minifiedScript.code;
 
     componentContext.rootDom.window.document.head.appendChild(scriptElement);
   }
