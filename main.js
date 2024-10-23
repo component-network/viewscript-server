@@ -1,11 +1,14 @@
+const { createHash, randomUUID } = require("crypto");
 const { readFile } = require("fs/promises");
 const { resolve } = require("path");
 const { JSDOM } = require("jsdom");
 const postcss = require("postcss");
 const tailwindcss = require("tailwindcss");
+const typescript = require("typescript");
 const YAML = require("yaml");
 
 const getComponentFromFsCache = new Map();
+const renderComponentCache = new Map();
 
 const tailwindCssAtRules =
   "@tailwind base; @tailwind components; @tailwind utilities;";
@@ -205,9 +208,23 @@ async function applyImportsToDomElement(domElement, context) {
         childrenSlot.replaceWith(...importedElement.childNodes);
       }
 
-      domElement.head.append(...importDom.window.document.head.childNodes);
+      importDom.window.document.head.childNodes.forEach((child) => {
+        if (
+          (child.tagName === "LINK" &&
+            !domElement.querySelector(
+              `link[href="${child.getAttribute("href")}"]`
+            )) ||
+          (child.tagName === "SCRIPT" &&
+            !domElement.querySelector(
+              `script[src="${child.getAttribute("src")}"]`
+            ))
+        ) {
+          domElement.head?.appendChild(child);
+        }
+      });
+
       importedElement.replaceWith(...importDom.window.document.body.childNodes);
-      await applyImportsToDomElement(importDom.window.document.body, context);
+      await applyImportsToDomElement(importDom.window.document, context);
     }
   }
 }
@@ -234,16 +251,19 @@ exports.getComponentFromFs = async function getComponentFromFs(
     );
   }
 
-  const templateFilePath = resolve(baseDir, componentDir, "template.html");
   const settingsFilePath = resolve(baseDir, componentDir, "settings.yaml");
+  const templateFilePath = resolve(baseDir, componentDir, "template.html");
+  const upgradesFilePath = resolve(baseDir, componentDir, "upgrades.ts");
 
-  const [componentTemplate, componentSettingsSource] = await Promise.all([
-    readFile(templateFilePath, "utf8"),
-    readFile(settingsFilePath, "utf8"),
-  ]);
+  const [componentSettingsSource, componentTemplate, componentUpgrades] =
+    await Promise.all([
+      readFile(settingsFilePath, "utf8"),
+      readFile(templateFilePath, "utf8"),
+      readFile(upgradesFilePath, "utf8").catch(() => null),
+    ]);
 
   const componentSettings = YAML.parse(componentSettingsSource);
-  const component = { componentSettings, componentTemplate };
+  const component = { componentSettings, componentTemplate, componentUpgrades };
 
   if (cacheOptions.enabled) {
     getComponentFromFsCache.set(componentDir, component);
@@ -257,10 +277,19 @@ exports.renderComponent = async function renderComponent(
   customData,
   context
 ) {
-  const { componentSettings, componentTemplate } = await context.getComponent(
-    componentUri,
-    context.getComponentOptions
-  );
+  let componentMetadata = renderComponentCache.get(componentUri);
+
+  if (!componentMetadata) {
+    componentMetadata = {
+      renderings: new Map(),
+      uuid: randomUUID(),
+    };
+
+    renderComponentCache.set(componentUri, componentMetadata);
+  }
+
+  const { componentSettings, componentTemplate, componentUpgrades } =
+    await context.getComponent(componentUri, context.getComponentOptions);
 
   console.log(
     `[viewscript-server] renderComponent    ${componentUri} with`,
@@ -275,6 +304,21 @@ exports.renderComponent = async function renderComponent(
   };
 
   const componentData = setupComponentData(baseData, componentSettings.when);
+  const componentDataSerialized = JSON.stringify(componentData);
+
+  const componentRendering =
+    componentDataSerialized + componentTemplate + (componentUpgrades ?? "");
+
+  const renderingHash = createHash("md5")
+    .update(componentRendering)
+    .digest("hex");
+
+  console.log("componentRendering", componentRendering);
+  console.log("renderingHash", renderingHash);
+
+  if (componentMetadata.renderings.has(renderingHash)) {
+    return componentMetadata.renderings.get(renderingHash);
+  }
 
   const componentContext = {
     ...context,
@@ -284,7 +328,7 @@ exports.renderComponent = async function renderComponent(
 
   applyDataToDomElement(
     componentDom.window.document,
-    componentData,
+    { id: renderingHash, ...componentData },
     componentContext
   );
 
@@ -292,6 +336,32 @@ exports.renderComponent = async function renderComponent(
     componentDom.window.document,
     componentContext
   );
+
+  if (componentUpgrades) {
+    if (
+      !componentDom.window.document.querySelector(
+        `script[id="${componentMetadata.uuid}"]`
+      )
+    ) {
+      const componentScript = typescript.transpileModule(componentUpgrades, {
+        compilerOptions: { module: typescript.ModuleKind.None },
+      });
+
+      if (componentScript.outputText) {
+        const script = componentDom.window.document.createElement("script");
+        script.id = componentMetadata.uuid;
+
+        script.textContent = `globalThis.ViewScript = globalThis.ViewScript || {components:{}};
+globalThis.ViewScript.components["${componentMetadata.uuid}"] = {};
+(function (exports) {
+${componentScript.outputText}})(globalThis.ViewScript.components["${componentMetadata.uuid}"]);
+new (globalThis.ViewScript.components["${componentMetadata.uuid}"].default)(${componentDataSerialized});`;
+
+        componentDom.window.document.head.appendChild(script);
+        console.log(script.textContent);
+      }
+    }
+  }
 
   if (componentSettings.plugins.tailwindcss) {
     const css = await postcss([
@@ -308,6 +378,8 @@ exports.renderComponent = async function renderComponent(
   }
 
   const serializedDom = componentDom.serialize();
+
+  componentMetadata.renderings.set(renderingHash, serializedDom);
 
   return serializedDom;
 };
