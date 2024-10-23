@@ -296,11 +296,12 @@ globalThis.ViewScript.components["${componentId}"]
   const scriptData = JSON.stringify(componentData);
 
   const minifiedScript = await minify(`
-addEventListener("DOMContentLoaded", function () {
+addEventListener("load", function () {
 new (globalThis.ViewScript.components["${componentId}"].default)(${scriptData});
 });`);
 
   scriptElement.textContent = minifiedScript.code;
+  scriptElement.className = componentId;
   dom.window.document.head.appendChild(scriptElement);
 }
 
@@ -320,10 +321,6 @@ exports.getComponentFromFs = async function getComponentFromFs(
 
       return cachedComponent;
     }
-
-    console.log(
-      `[viewscript-server] getComponentFromFs ${componentDir} from disk`
-    );
   }
 
   const settingsFilePath = resolve(baseDir, componentDir, "settings.yaml");
@@ -351,6 +348,10 @@ exports.getComponentFromFs = async function getComponentFromFs(
   if (cacheOptions.enabled) {
     getComponentFromFsCache.set(componentDir, component);
   }
+
+  console.log(
+    `[viewscript-server] getComponentFromFs ${componentDir} from disk`
+  );
 
   return component;
 };
@@ -387,8 +388,8 @@ exports.renderComponent = async function renderComponent(
 
   const componentContext = {
     ...context,
-    renderComponent,
     componentSettings,
+    renderComponent,
   };
 
   applyDataToDomElement(
