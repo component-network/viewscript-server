@@ -310,7 +310,7 @@ exports.renderComponent = async function renderComponent(
 
   if (componentMetadata.renderings.has(renderingHash)) {
     console.log(
-      `[viewscript-server] renderComponent    ${componentUri} from cache with`,
+      `[viewscript-server] renderComponent    ${componentUri} @${renderingHash} from cache with`,
       customData
     );
 
@@ -378,7 +378,7 @@ new (globalThis.ViewScript.components["${componentMetadata.uuid}"].default)(${co
   componentMetadata.renderings.set(renderingHash, serializedDom);
 
   console.log(
-    `[viewscript-server] renderComponent    ${componentUri} from scratch with`,
+    `[viewscript-server] renderComponent    ${componentUri} @${renderingHash} from scratch with`,
     customData
   );
 
