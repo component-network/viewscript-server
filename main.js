@@ -208,18 +208,35 @@ async function applyImportsToDomElement(domElement, context) {
         childrenSlot.replaceWith(...importedElement.childNodes);
       }
 
-      importDom.window.document.head.childNodes.forEach((child) => {
-        if (
-          (child.tagName === "LINK" &&
-            !domElement.querySelector(
-              `link[href="${child.getAttribute("href")}"]`
-            )) ||
-          (child.tagName === "SCRIPT" &&
-            !domElement.querySelector(
-              `script[src="${child.getAttribute("src")}"]`
-            ))
-        ) {
-          domElement.head?.appendChild(child);
+      Array.from(importDom.window.document.head.childNodes).forEach((child) => {
+        if (child.tagName === "LINK") {
+          if (
+            !child.href ||
+            !Array.from(
+              context.rootDom.window.document.querySelectorAll("link")
+            ).some((link) => link.href === child.href)
+          ) {
+            context.rootDom.window.document.head.append(child);
+          }
+        } else if (child.tagName === "SCRIPT") {
+          if (
+            !child.src ||
+            !Array.from(
+              context.rootDom.window.document.querySelectorAll("script")
+            ).some((script) => script.src === child.src)
+          ) {
+            context.rootDom.window.document.head.append(child);
+          }
+        } else if (child.tagName === "STYLE") {
+          if (
+            !Array.from(
+              context.rootDom.window.document.querySelectorAll("style")
+            ).some((style) => style.textContent === child.textContent)
+          ) {
+            context.rootDom.window.document.head.append(child);
+          }
+        } else {
+          context.rootDom.window.document.head.append(child);
         }
       });
 
@@ -291,18 +308,17 @@ exports.renderComponent = async function renderComponent(
   const { componentSettings, componentTemplate, componentUpgrades } =
     await context.getComponent(componentUri, context.getComponentOptions);
 
-  const componentDom = new JSDOM(componentTemplate);
-
   const baseData = {
     ...structuredClone(componentSettings.data),
     ...customData,
   };
 
   const componentData = setupComponentData(baseData, componentSettings.when);
-  const componentDataSerialized = JSON.stringify(componentData);
 
   const componentRendering =
-    componentDataSerialized + componentTemplate + (componentUpgrades ?? "");
+    JSON.stringify(componentData) +
+    componentTemplate +
+    (componentUpgrades || "");
 
   const renderingHash = createHash("md5")
     .update(componentRendering)
@@ -317,15 +333,23 @@ exports.renderComponent = async function renderComponent(
     return componentMetadata.renderings.get(renderingHash);
   }
 
+  const componentDom = new JSDOM(componentTemplate);
+
+  const componentDataWithId = {
+    id: renderingHash,
+    ...componentData,
+  };
+
   const componentContext = {
     ...context,
     renderComponent,
     componentSettings,
+    rootDom: context.rootDom || componentDom,
   };
 
   applyDataToDomElement(
     componentDom.window.document,
-    { id: renderingHash, ...componentData },
+    componentDataWithId,
     componentContext
   );
 
@@ -336,41 +360,60 @@ exports.renderComponent = async function renderComponent(
 
   if (componentUpgrades) {
     if (
-      !componentDom.window.document.querySelector(
+      !componentContext.rootDom.window.document.querySelector(
         `script[id="${componentMetadata.uuid}"]`
       )
     ) {
-      const componentScript = typescript.transpileModule(componentUpgrades, {
+      const compiledScript = typescript.transpileModule(componentUpgrades, {
         compilerOptions: { module: typescript.ModuleKind.None },
       });
 
-      if (componentScript.outputText) {
-        const script = componentDom.window.document.createElement("script");
-        script.id = componentMetadata.uuid;
+      if (compiledScript.outputText) {
+        const scriptElement =
+          componentContext.rootDom.window.document.createElement("script");
 
-        script.textContent = `globalThis.ViewScript = globalThis.ViewScript || {components:{}};
+        scriptElement.id = componentMetadata.uuid;
+
+        scriptElement.textContent = `globalThis.ViewScript = globalThis.ViewScript || {components:{}};
 globalThis.ViewScript.components["${componentMetadata.uuid}"] = {};
 (function (exports) {
-${componentScript.outputText}})(globalThis.ViewScript.components["${componentMetadata.uuid}"]);
-new (globalThis.ViewScript.components["${componentMetadata.uuid}"].default)(${componentDataSerialized});`;
+${compiledScript.outputText}})(globalThis.ViewScript.components["${componentMetadata.uuid}"]);`;
 
-        componentDom.window.document.head.appendChild(script);
+        componentContext.rootDom.window.document.head.appendChild(
+          scriptElement
+        );
       }
     }
+
+    const scriptElement =
+      componentContext.rootDom.window.document.createElement("script");
+
+    const scriptData = JSON.stringify(componentDataWithId);
+
+    scriptElement.textContent = `addEventListener("DOMContentLoaded", function () {
+  new (globalThis.ViewScript.components["${componentMetadata.uuid}"].default)(${scriptData});
+});`;
+
+    componentContext.rootDom.window.document.head.appendChild(scriptElement);
   }
 
-  if (componentSettings.plugins.tailwindcss) {
+  if (
+    componentSettings.plugins.tailwindcss &&
+    componentContext.rootDom === componentDom
+  ) {
     const css = await postcss([
       tailwindcss({
         presets: [componentSettings.plugins.tailwindcss],
-        content: [{ raw: componentDom.serialize() }],
+        content: [{ raw: componentContext.rootDom.serialize() }],
       }),
     ]).process(tailwindCssAtRules);
 
-    const style = componentDom.window.document.createElement("style");
+    const style =
+      componentContext.rootDom.window.document.createElement("style");
+
     style.textContent = css;
 
-    componentDom.window.document.head.appendChild(style);
+    componentContext.rootDom.window.document.head.appendChild(style);
   }
 
   const serializedDom = componentDom.serialize();
