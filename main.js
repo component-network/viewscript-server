@@ -291,11 +291,6 @@ exports.renderComponent = async function renderComponent(
   const { componentSettings, componentTemplate, componentUpgrades } =
     await context.getComponent(componentUri, context.getComponentOptions);
 
-  console.log(
-    `[viewscript-server] renderComponent    ${componentUri} with`,
-    customData
-  );
-
   const componentDom = new JSDOM(componentTemplate);
 
   const baseData = {
@@ -313,10 +308,12 @@ exports.renderComponent = async function renderComponent(
     .update(componentRendering)
     .digest("hex");
 
-  console.log("componentRendering", componentRendering);
-  console.log("renderingHash", renderingHash);
-
   if (componentMetadata.renderings.has(renderingHash)) {
+    console.log(
+      `[viewscript-server] renderComponent    ${componentUri} from cache with`,
+      customData
+    );
+
     return componentMetadata.renderings.get(renderingHash);
   }
 
@@ -358,7 +355,6 @@ ${componentScript.outputText}})(globalThis.ViewScript.components["${componentMet
 new (globalThis.ViewScript.components["${componentMetadata.uuid}"].default)(${componentDataSerialized});`;
 
         componentDom.window.document.head.appendChild(script);
-        console.log(script.textContent);
       }
     }
   }
@@ -380,6 +376,11 @@ new (globalThis.ViewScript.components["${componentMetadata.uuid}"].default)(${co
   const serializedDom = componentDom.serialize();
 
   componentMetadata.renderings.set(renderingHash, serializedDom);
+
+  console.log(
+    `[viewscript-server] renderComponent    ${componentUri} from scratch with`,
+    customData
+  );
 
   return serializedDom;
 };
