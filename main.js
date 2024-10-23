@@ -298,7 +298,6 @@ exports.renderComponent = async function renderComponent(
 
   if (!componentMetadata) {
     componentMetadata = {
-      renderings: new Map(),
       uuid: randomUUID(),
     };
 
@@ -308,36 +307,16 @@ exports.renderComponent = async function renderComponent(
   const { componentSettings, componentTemplate, componentUpgrades } =
     await context.getComponent(componentUri, context.getComponentOptions);
 
+  const componentDom = new JSDOM(componentTemplate);
+
   const baseData = {
     ...structuredClone(componentSettings.data),
     ...customData,
   };
 
-  const componentData = setupComponentData(baseData, componentSettings.when);
-
-  const componentRendering =
-    JSON.stringify(componentData) +
-    componentTemplate +
-    (componentUpgrades || "");
-
-  const renderingHash = createHash("md5")
-    .update(componentRendering)
-    .digest("hex");
-
-  if (componentMetadata.renderings.has(renderingHash)) {
-    console.log(
-      `[viewscript-server] renderComponent    ${componentUri} @${renderingHash} from cache with`,
-      customData
-    );
-
-    return componentMetadata.renderings.get(renderingHash);
-  }
-
-  const componentDom = new JSDOM(componentTemplate);
-
   const componentDataWithId = {
-    id: renderingHash,
-    ...componentData,
+    id: randomUUID(),
+    ...setupComponentData(baseData, componentSettings.when),
   };
 
   const componentContext = {
@@ -418,10 +397,8 @@ ${compiledScript.outputText}})(globalThis.ViewScript.components["${componentMeta
 
   const serializedDom = componentDom.serialize();
 
-  componentMetadata.renderings.set(renderingHash, serializedDom);
-
   console.log(
-    `[viewscript-server] renderComponent    ${componentUri} @${renderingHash} from scratch with`,
+    `[viewscript-server] renderComponent    ${componentUri} with`,
     customData
   );
 
