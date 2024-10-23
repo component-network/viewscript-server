@@ -163,11 +163,11 @@ function getNestedValue(obj, path) {
   return path?.split(".").reduce((acc, key) => acc?.[key], obj);
 }
 
-async function applyImportsToDomElement(domElement, context) {
+async function applyImportsToDom(dom, context) {
   for (const importKey in context.componentSettings.imports) {
     const importUri = context.componentSettings.imports[importKey];
 
-    const importedElements = domElement.querySelectorAll(
+    const importedElements = dom.window.document.querySelectorAll(
       importKey.toLowerCase()
     );
 
@@ -183,7 +183,7 @@ async function applyImportsToDomElement(domElement, context) {
       const importRendering = await context.renderComponent(
         importUri,
         importAttributes,
-        context
+        { ...context, isDescendantComponent: true }
       );
 
       const importDom = new JSDOM(importRendering);
@@ -212,43 +212,96 @@ async function applyImportsToDomElement(domElement, context) {
       Array.from(importDom.window.document.head.children).forEach((child) => {
         if (child.tagName === "LINK") {
           if (
-            !Array.from(
-              context.rootDom.window.document.head.querySelectorAll("link")
-            ).some((link) => link.href && link.href === child.href)
+            !Array.from(dom.window.document.head.querySelectorAll("link")).some(
+              (link) => link.href && link.href === child.href
+            )
           ) {
-            context.rootDom.window.document.head.appendChild(child);
+            dom.window.document.head.appendChild(child);
           }
         } else if (child.tagName === "SCRIPT") {
-          const allHeadScripts = Array.from(
-            context.rootDom.window.document.head.querySelectorAll("script")
-          );
-
           if (
-            !allHeadScripts.some(
+            !Array.from(
+              dom.window.document.head.querySelectorAll("script")
+            ).some(
               (script) =>
                 (script.id && script.id === child.id) ||
                 (script.src && script.src === child.src)
             )
           ) {
-            context.rootDom.window.document.head.appendChild(child);
+            dom.window.document.head.appendChild(child);
           }
         } else if (child.tagName === "STYLE") {
           if (
             !Array.from(
-              context.rootDom.window.document.head.querySelectorAll("style")
+              dom.window.document.head.querySelectorAll("style")
             ).some((style) => style.textContent === child.textContent)
           ) {
-            context.rootDom.window.document.head.appendChild(child);
+            dom.window.document.head.appendChild(child);
           }
         } else {
-          context.rootDom.window.document.head.appendChild(child);
+          dom.window.document.head.appendChild(child);
         }
       });
 
       importedElement.replaceWith(...importDom.window.document.body.childNodes);
-      await applyImportsToDomElement(importDom.window.document, context);
+      await applyImportsToDom(importDom, context);
     }
   }
+}
+
+async function applyPluginsToDom(dom, settings) {
+  if (settings.plugins.tailwindcss) {
+    const css = await postcss([
+      tailwindcss({
+        presets: [settings.plugins.tailwindcss],
+        content: [{ raw: dom.serialize() }],
+      }),
+    ]).process(tailwindCssAtRules);
+
+    const style = dom.window.document.createElement("style");
+    style.textContent = css;
+    dom.window.document.head.appendChild(style);
+  }
+}
+
+async function applyEnhancementsToDom(
+  dom,
+  enhancements,
+  componentId,
+  componentData
+) {
+  if (!dom.window[componentId]) {
+    const compiledScript = typescript.transpileModule(enhancements, {
+      compilerOptions: { module: typescript.ModuleKind.None },
+    });
+
+    if (compiledScript.outputText) {
+      const scriptElement = dom.window.document.createElement("script");
+
+      scriptElement.id = componentId;
+
+      const minifiedScript = await minify(`
+globalThis.ViewScript = globalThis.ViewScript || { components: {} };
+globalThis.ViewScript.components["${componentId}"] = {};
+(function (exports) { ${compiledScript.outputText} })(
+globalThis.ViewScript.components["${componentId}"]
+);`);
+
+      scriptElement.textContent = minifiedScript.code;
+      dom.window.document.head.appendChild(scriptElement);
+    }
+  }
+
+  const scriptElement = dom.window.document.createElement("script");
+  const scriptData = JSON.stringify(componentData);
+
+  const minifiedScript = await minify(`
+addEventListener("DOMContentLoaded", function () {
+new (globalThis.ViewScript.components["${componentId}"].default)(${scriptData});
+});`);
+
+  scriptElement.textContent = minifiedScript.code;
+  dom.window.document.head.appendChild(scriptElement);
 }
 
 exports.getComponentFromFs = async function getComponentFromFs(
@@ -311,7 +364,7 @@ exports.renderComponent = async function renderComponent(
 
   if (!componentMetadata) {
     componentMetadata = {
-      uuid: randomUUID(),
+      componentId: randomUUID(),
     };
 
     renderComponentCache.set(componentUri, componentMetadata);
@@ -336,7 +389,6 @@ exports.renderComponent = async function renderComponent(
     ...context,
     renderComponent,
     componentSettings,
-    rootDom: context.rootDom || componentDom,
   };
 
   applyDataToDomElement(
@@ -345,70 +397,20 @@ exports.renderComponent = async function renderComponent(
     componentContext
   );
 
-  await applyImportsToDomElement(
-    componentDom.window.document,
-    componentContext
-  );
+  await applyImportsToDom(componentDom, componentContext);
 
-  if (componentEnhancements) {
-    if (!componentContext.rootDom.window[componentMetadata.uuid]) {
-      const compiledScript = typescript.transpileModule(componentEnhancements, {
-        compilerOptions: { module: typescript.ModuleKind.None },
-      });
-
-      if (compiledScript.outputText) {
-        const scriptElement =
-          componentContext.rootDom.window.document.createElement("script");
-
-        scriptElement.id = componentMetadata.uuid;
-
-        const minifiedScript = await minify(`
-globalThis.ViewScript = globalThis.ViewScript || { components: {} };
-globalThis.ViewScript.components["${componentMetadata.uuid}"] = {};
-(function (exports) { ${compiledScript.outputText} })(
-  globalThis.ViewScript.components["${componentMetadata.uuid}"]
-);`);
-
-        scriptElement.textContent = minifiedScript.code;
-
-        componentContext.rootDom.window.document.head.appendChild(
-          scriptElement
-        );
-      }
-    }
-
-    const scriptElement =
-      componentContext.rootDom.window.document.createElement("script");
-
-    const scriptData = JSON.stringify(componentDataWithId);
-
-    const minifiedScript = await minify(`
-addEventListener("DOMContentLoaded", function () {
-  new (globalThis.ViewScript.components["${componentMetadata.uuid}"].default)(${scriptData});
-});`);
-
-    scriptElement.textContent = minifiedScript.code;
-
-    componentContext.rootDom.window.document.head.appendChild(scriptElement);
+  // Apply plugins only to the root component
+  if (!context.isDescendantComponent) {
+    await applyPluginsToDom(componentDom, componentSettings);
   }
 
-  if (
-    componentSettings.plugins.tailwindcss &&
-    componentContext.rootDom === componentDom
-  ) {
-    const css = await postcss([
-      tailwindcss({
-        presets: [componentSettings.plugins.tailwindcss],
-        content: [{ raw: componentContext.rootDom.serialize() }],
-      }),
-    ]).process(tailwindCssAtRules);
-
-    const style =
-      componentContext.rootDom.window.document.createElement("style");
-
-    style.textContent = css;
-
-    componentContext.rootDom.window.document.head.appendChild(style);
+  if (componentEnhancements) {
+    await applyEnhancementsToDom(
+      componentDom,
+      componentEnhancements,
+      componentMetadata.componentId,
+      componentDataWithId
+    );
   }
 
   const serializedDom = componentDom.serialize();

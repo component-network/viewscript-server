@@ -26,6 +26,7 @@ export declare function renderComponent<GetComponentOptions>(
   componentUri: string,
   customData: Record<string, unknown> | null | undefined,
   context: {
+    componentSettings?: ComponentSettings;
     getComponent(
       componentUri: string,
       options?: GetComponentOptions
@@ -34,7 +35,7 @@ export declare function renderComponent<GetComponentOptions>(
       componentTemplate: string;
     }>;
     getComponentOptions?: GetComponentOptions;
+    isDescendantComponent?: boolean;
     renderComponent?: typeof renderComponent;
-    componentSettings?: ComponentSettings;
   }
 ): Promise<string>;
