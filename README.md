@@ -2,7 +2,7 @@
 
 **ViewScript Server** is a Node.js module that renders components written in HTML, with a little extra magic.
 
-Each ViewScript component has an URN, a Unique Resource Name, which may be
+Each ViewScript component has an ID which may be
 - its file system path, relative to the base path, with path separators replaced by underscores
 - its database UUID
 - its database namespaced name
