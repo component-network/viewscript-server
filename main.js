@@ -14,41 +14,6 @@ const renderComponentCache = new Map();
 const tailwindCssAtRules =
   "@tailwind base; @tailwind components; @tailwind utilities;";
 
-function setupComponentData(data, when) {
-  if (data.style && typeof data.style === "string") {
-    data.style = data.style.split(";").reduce((acc, style) => {
-      const [key, value] = style.split(":").map((s) => s.trim());
-      acc[key] = value;
-      return acc;
-    }, {});
-  }
-
-  if (when) {
-    Object.entries(when).forEach(([conditionalKey, conditionalValue]) => {
-      Object.entries(conditionalValue).forEach(([dataKey, dataValue]) => {
-        const condition = getNestedValue(data, conditionalKey);
-        if (condition) {
-          if (dataKey === "style") {
-            Object.entries(dataValue).forEach(([styleKey, styleValue]) => {
-              data.style[styleKey] = styleValue;
-            });
-          } else {
-            data[dataKey] = dataValue;
-          }
-        }
-      });
-    });
-  }
-
-  if (data.style && typeof data.style === "object") {
-    data.style = Object.entries(data.style)
-      .map(([key, value]) => `${key}: ${value}`)
-      .join("; ");
-  }
-
-  return data;
-}
-
 function applyDataToDomElement(domElement, data, context) {
   // Rubber-stamp elements with a use-for attribute
   const repeaters = domElement.querySelectorAll("[use-for]");
@@ -306,51 +271,47 @@ new (globalThis.ViewScript.components["${componentId}"].default)(${scriptData});
 }
 
 exports.getComponentFromFs = async function getComponentFromFs(
-  componentDir,
+  componentPath,
   options = {}
 ) {
   const { baseDir = "", cacheOptions = {} } = options;
 
-  if (cacheOptions.enabled) {
-    const cachedComponent = getComponentFromFsCache.get(componentDir);
+  if (!cacheOptions.disabled) {
+    const cachedComponent = getComponentFromFsCache.get(componentPath);
 
     if (cachedComponent) {
       console.log(
-        `[viewscript-server] getComponentFromFs ${componentDir} from cache`
+        `[viewscript-server] getComponentFromFs ${componentPath} from cache`
       );
 
       return cachedComponent;
     }
   }
 
-  const settingsFilePath = resolve(baseDir, componentDir, "settings.yaml");
-  const templateFilePath = resolve(baseDir, componentDir, "template.html");
-  const enhancementsFilePath = resolve(
-    baseDir,
-    componentDir,
-    "enhancements.ts"
-  );
+  const templateFilePath = resolve(baseDir, `${componentPath}.html`);
+  const scriptFilePath = resolve(baseDir, `${componentPath}.ts`);
+  const settingsFilePath = resolve(baseDir, `${componentPath}.yaml`);
 
-  const [componentSettingsSource, componentTemplate, componentEnhancements] =
+  const [componentTemplate, componentScript, componentSettingsRaw] =
     await Promise.all([
-      readFile(settingsFilePath, "utf8"),
       readFile(templateFilePath, "utf8"),
-      readFile(enhancementsFilePath, "utf8").catch(() => null),
+      readFile(scriptFilePath, "utf8").catch(() => null),
+      readFile(settingsFilePath, "utf8").catch(() => null),
     ]);
 
-  const componentSettings = YAML.parse(componentSettingsSource);
+  const componentSettings = YAML.parse(componentSettingsRaw);
   const component = {
-    componentSettings,
     componentTemplate,
-    componentEnhancements,
+    componentScript,
+    componentSettings,
   };
 
-  if (cacheOptions.enabled) {
-    getComponentFromFsCache.set(componentDir, component);
+  if (!cacheOptions.disabled) {
+    getComponentFromFsCache.set(componentPath, component);
   }
 
   console.log(
-    `[viewscript-server] getComponentFromFs ${componentDir} from disk`
+    `[viewscript-server] getComponentFromFs ${componentPath} from disk`
   );
 
   return component;
@@ -371,19 +332,15 @@ exports.renderComponent = async function renderComponent(
     renderComponentCache.set(componentUri, componentMetadata);
   }
 
-  const { componentSettings, componentTemplate, componentEnhancements } =
+  const { componentTemplate, componentSettings, componentScript } =
     await context.getComponent(componentUri, context.getComponentOptions);
 
   const componentDom = new JSDOM(componentTemplate);
 
-  const baseData = {
-    ...structuredClone(componentSettings.data),
-    ...customData,
-  };
-
   const componentDataWithId = {
     id: randomUUID(),
-    ...setupComponentData(baseData, componentSettings.when),
+    ...structuredClone(componentSettings.context),
+    ...customData,
   };
 
   const componentContext = {
@@ -405,10 +362,10 @@ exports.renderComponent = async function renderComponent(
     await applyPluginsToDom(componentDom, componentSettings);
   }
 
-  if (componentEnhancements) {
+  if (componentScript) {
     await applyEnhancementsToDom(
       componentDom,
-      componentEnhancements,
+      componentScript,
       componentMetadata.componentId,
       componentDataWithId
     );

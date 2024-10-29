@@ -9,7 +9,7 @@ export interface ComponentSettings {
 export interface GetComponentFromFsOptions {
   baseDir?: string;
   cacheOptions?: {
-    enabled?: boolean;
+    disabled?: boolean;
   };
 }
 
