@@ -1,34 +1,27 @@
-export interface ComponentSettings {
-  context?: Record<string, unknown>;
-  overrides?: Record<string, Record<string, unknown>>;
-}
+import type { parse as YAMLparse } from "yaml";
 
-export interface ComponentEntity {
+export type GetComponentFunction<T extends GetComponentOptions> = (
+  componentUri: string,
+  getComponentOptions?: T
+) => Promise<{
   componentTemplate: string;
-  componentSettings?: ComponentSettings;
   componentScript?: string;
-}
+  componentSettings?: ReturnType<typeof YAMLparse>;
+}>;
 
-export interface GetComponentFromFsOptions {
-  baseDir?: string;
+export const getComponentFromFs: GetComponentFunction<{
+  basePath?: string;
   cacheOptions?: {
     disabled?: boolean;
   };
-}
+}>;
 
-export declare type GetComponentFunction<Options extends GetComponentOptions> =
-  (componentUri: string, options?: Options) => Promise<ComponentEntity>;
-
-export declare const getComponentFromFs: GetComponentFunction<GetComponentFromFsOptions>;
-
-export declare function renderComponent<GetComponentOptions>(
+export function renderComponent<GetComponentOptions>(
   componentUri: string,
-  customData: Record<string, unknown> | null | undefined,
-  context: {
-    componentSettings?: ComponentSettings;
+  customContext: Record<string, unknown> | null | undefined,
+  renderingOptions: {
+    descendant?: boolean;
     getComponent: GetComponentFunction;
     getComponentOptions?: GetComponentOptions;
-    isDescendantComponent?: boolean;
-    renderComponent?: typeof renderComponent;
   }
 ): Promise<string>;

@@ -14,7 +14,7 @@ const renderComponentCache = new Map();
 const tailwindCssAtRules =
   "@tailwind base; @tailwind components; @tailwind utilities;";
 
-function applyDataToDomElement(domElement, data, context) {
+function applyDataToDomElement(domElement, data, renderingOptions) {
   // Repeat elements with a use-for attribute
   const repeaters = domElement.querySelectorAll("[use-for]");
 
@@ -35,7 +35,7 @@ function applyDataToDomElement(domElement, data, context) {
         [itemName]: item,
       };
 
-      applyDataToDomElement(clonedElement, clonedElementData, context);
+      applyDataToDomElement(clonedElement, clonedElementData, renderingOptions);
       repeater.insertAdjacentElement("beforebegin", clonedElement);
     }
 
@@ -78,13 +78,13 @@ function applyDataToDomElement(domElement, data, context) {
   }
 
   // Replace colon-prefixed attributes using the given data
-  applyDataToDomElementAttributes(domElement, data, context);
+  applyDataToDomElementAttributes(domElement, data, renderingOptions);
 }
 
-function applyDataToDomElementAttributes(domElement, data, context) {
-  const isImportedElement = Object.keys(context.componentSettings.imports).some(
-    (importKey) => importKey.toUpperCase() === domElement.tagName
-  );
+function applyDataToDomElementAttributes(domElement, data, renderingOptions) {
+  const isImportedElement = Object.keys(
+    renderingOptions.componentSettings.imports
+  ).some((importKey) => importKey.toUpperCase() === domElement.tagName);
 
   const attributes = Array.from(domElement.attributes || []);
 
@@ -120,7 +120,7 @@ function applyDataToDomElementAttributes(domElement, data, context) {
   }
 
   for (const child of domElement.children) {
-    applyDataToDomElementAttributes(child, data, context);
+    applyDataToDomElementAttributes(child, data, renderingOptions);
   }
 }
 
@@ -128,11 +128,35 @@ function getNestedValue(obj, path) {
   return path?.split(".").reduce((acc, key) => acc?.[key], obj);
 }
 
-async function applyImportsToDom(dom, data, context) {
-  // TODO Apply globals to DOM if !context.isDescendantComponent
+async function applyGlobalsToDom(dom, data, renderingOptions) {
+  if (renderingOptions.descendant) {
+    return;
+  }
 
-  for (const importKey in context.componentSettings.imports) {
-    const importUri = context.componentSettings.imports[importKey];
+  const globalRendering = await renderingOptions.renderComponent(
+    "global",
+    data,
+    { ...renderingOptions, descendant: true }
+  );
+
+  const globalDom = new JSDOM(globalRendering);
+
+  const childrenSlots =
+    globalDom.window.document.querySelectorAll("slot:not([name])");
+
+  for (const childrenSlot of childrenSlots) {
+    childrenSlot.replaceWith(...dom.window.document.body.childNodes);
+  }
+
+  globalDom.window.document.head.append(...dom.window.document.head.children);
+
+  dom.window.document.body.innerHTML = globalDom.window.document.body.innerHTML;
+  dom.window.document.head.innerHTML = globalDom.window.document.head.innerHTML;
+}
+
+async function applyImportsToDom(dom, data, renderingOptions) {
+  for (const importKey in renderingOptions.componentSettings.imports) {
+    const importUri = renderingOptions.componentSettings.imports[importKey];
 
     const importedElements = dom.window.document.querySelectorAll(
       importKey.toLowerCase()
@@ -147,10 +171,10 @@ async function applyImportsToDom(dom, data, context) {
         {}
       );
 
-      const importRendering = await context.renderComponent(
+      const importRendering = await renderingOptions.renderComponent(
         importUri,
         { ...data, ...importAttributes },
-        { ...context, isDescendantComponent: true }
+        { ...renderingOptions, descendant: true }
       );
 
       const importDom = new JSDOM(importRendering);
@@ -211,7 +235,7 @@ async function applyImportsToDom(dom, data, context) {
       });
 
       importedElement.replaceWith(...importDom.window.document.body.childNodes);
-      await applyImportsToDom(importDom, data, context);
+      await applyImportsToDom(importDom, data, renderingOptions);
     }
   }
 }
@@ -271,7 +295,7 @@ exports.getComponentFromFs = async function getComponentFromFs(
   componentPath,
   options = {}
 ) {
-  const { baseDir = "", cacheOptions = {} } = options;
+  const { basePath = "", cacheOptions = {} } = options;
 
   if (!cacheOptions.disabled) {
     const cachedComponent = getComponentFromFsCache.get(componentPath);
@@ -285,9 +309,9 @@ exports.getComponentFromFs = async function getComponentFromFs(
     }
   }
 
-  const templateFilePath = resolve(baseDir, `${componentPath}.html`);
-  const scriptFilePath = resolve(baseDir, `${componentPath}.ts`);
-  const settingsFilePath = resolve(baseDir, `${componentPath}.yaml`);
+  const templateFilePath = resolve(basePath, `${componentPath}.html`);
+  const scriptFilePath = resolve(basePath, `${componentPath}.ts`);
+  const settingsFilePath = resolve(basePath, `${componentPath}.yaml`);
 
   const [componentTemplate, componentScript, componentSettingsRaw] =
     await Promise.all([
@@ -318,8 +342,8 @@ exports.getComponentFromFs = async function getComponentFromFs(
 
 exports.renderComponent = async function renderComponent(
   componentUri,
-  customData,
-  context
+  customContext,
+  renderingOptions
 ) {
   let componentMetadata = renderComponentCache.get(componentUri);
 
@@ -333,20 +357,23 @@ exports.renderComponent = async function renderComponent(
 
   const {
     componentTemplate,
-    componentSettings = { imports: {}, plugins: {} }, // TODO Remove default value
+    componentSettings = { context: {}, imports: {}, plugins: {} }, // TODO Remove default value
     componentScript,
-  } = await context.getComponent(componentUri, context.getComponentOptions);
+  } = await renderingOptions.getComponent(
+    componentUri,
+    renderingOptions.getComponentOptions
+  );
 
   const componentDom = new JSDOM(componentTemplate);
 
   const componentDataWithId = {
     id: randomUUID(),
     ...structuredClone(componentSettings.context),
-    ...customData,
+    ...customContext,
   };
 
   const componentContext = {
-    ...context,
+    ...renderingOptions,
     componentSettings,
     renderComponent,
   };
@@ -357,9 +384,10 @@ exports.renderComponent = async function renderComponent(
     componentContext
   );
 
+  await applyGlobalsToDom(componentDom, componentDataWithId, componentContext);
   await applyImportsToDom(componentDom, componentDataWithId, componentContext);
 
-  if (!context.isDescendantComponent) {
+  if (!renderingOptions.descendant) {
     await applyPluginsToDom(componentDom, componentSettings);
 
     if (!componentDom.window.document.querySelector("meta[charset]")) {
@@ -392,7 +420,7 @@ exports.renderComponent = async function renderComponent(
 
   console.log(
     `[viewscript-server] renderComponent    ${componentUri} with`,
-    customData
+    customContext
   );
 
   return serializedDom;
