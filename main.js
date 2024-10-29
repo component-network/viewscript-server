@@ -15,7 +15,7 @@ const tailwindCssAtRules =
   "@tailwind base; @tailwind components; @tailwind utilities;";
 
 function applyDataToDomElement(domElement, data, context) {
-  // Rubber-stamp elements with a use-for attribute
+  // Repeat elements with a use-for attribute
   const repeaters = domElement.querySelectorAll("[use-for]");
 
   for (const repeater of repeaters) {
@@ -129,6 +129,8 @@ function getNestedValue(obj, path) {
 }
 
 async function applyImportsToDom(dom, data, context) {
+  // TODO Apply globals to DOM if !context.isDescendantComponent
+
   for (const importKey in context.componentSettings.imports) {
     const importUri = context.componentSettings.imports[importKey];
 
@@ -229,12 +231,7 @@ async function applyPluginsToDom(dom, settings) {
   }
 }
 
-async function applyEnhancementsToDom(
-  dom,
-  enhancements,
-  componentId,
-  componentData
-) {
+async function applyScriptToDom(dom, enhancements, componentId, componentData) {
   if (!dom.window[componentId]) {
     const compiledScript = typescript.transpileModule(enhancements, {
       compilerOptions: { module: typescript.ModuleKind.None },
@@ -362,13 +359,28 @@ exports.renderComponent = async function renderComponent(
 
   await applyImportsToDom(componentDom, componentDataWithId, componentContext);
 
-  // Apply plugins only to the root component
   if (!context.isDescendantComponent) {
     await applyPluginsToDom(componentDom, componentSettings);
+
+    if (!componentDom.window.document.querySelector("meta[charset]")) {
+      const metaCharset = componentDom.window.document.createElement("meta");
+      metaCharset.setAttribute("charset", "utf-8");
+      componentDom.window.document.head.appendChild(metaCharset);
+    }
+
+    if (!componentDom.window.document.querySelector("meta[name=viewport]")) {
+      const metaViewport = componentDom.window.document.createElement("meta");
+      metaViewport.setAttribute("name", "viewport");
+      metaViewport.setAttribute(
+        "content",
+        "width=device-width, initial-scale=1"
+      );
+      componentDom.window.document.head.appendChild(metaViewport);
+    }
   }
 
   if (componentScript) {
-    await applyEnhancementsToDom(
+    await applyScriptToDom(
       componentDom,
       componentScript,
       componentMetadata.componentId,
