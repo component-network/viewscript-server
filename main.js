@@ -128,7 +128,7 @@ function getNestedValue(obj, path) {
   return path?.split(".").reduce((acc, key) => acc?.[key], obj);
 }
 
-async function applyImportsToDom(dom, context) {
+async function applyImportsToDom(dom, data, context) {
   for (const importKey in context.componentSettings.imports) {
     const importUri = context.componentSettings.imports[importKey];
 
@@ -147,7 +147,7 @@ async function applyImportsToDom(dom, context) {
 
       const importRendering = await context.renderComponent(
         importUri,
-        importAttributes,
+        { ...data, ...importAttributes },
         { ...context, isDescendantComponent: true }
       );
 
@@ -209,7 +209,7 @@ async function applyImportsToDom(dom, context) {
       });
 
       importedElement.replaceWith(...importDom.window.document.body.childNodes);
-      await applyImportsToDom(importDom, context);
+      await applyImportsToDom(importDom, data, context);
     }
   }
 }
@@ -295,11 +295,13 @@ exports.getComponentFromFs = async function getComponentFromFs(
   const [componentTemplate, componentScript, componentSettingsRaw] =
     await Promise.all([
       readFile(templateFilePath, "utf8"),
-      readFile(scriptFilePath, "utf8").catch(() => null),
-      readFile(settingsFilePath, "utf8").catch(() => null),
+      readFile(scriptFilePath, "utf8").catch(() => undefined),
+      readFile(settingsFilePath, "utf8").catch(() => undefined),
     ]);
 
-  const componentSettings = YAML.parse(componentSettingsRaw);
+  const componentSettings =
+    componentSettingsRaw && YAML.parse(componentSettingsRaw);
+
   const component = {
     componentTemplate,
     componentScript,
@@ -332,8 +334,11 @@ exports.renderComponent = async function renderComponent(
     renderComponentCache.set(componentUri, componentMetadata);
   }
 
-  const { componentTemplate, componentSettings, componentScript } =
-    await context.getComponent(componentUri, context.getComponentOptions);
+  const {
+    componentTemplate,
+    componentSettings = { imports: {}, plugins: {} }, // TODO Remove default value
+    componentScript,
+  } = await context.getComponent(componentUri, context.getComponentOptions);
 
   const componentDom = new JSDOM(componentTemplate);
 
@@ -355,7 +360,7 @@ exports.renderComponent = async function renderComponent(
     componentContext
   );
 
-  await applyImportsToDom(componentDom, componentContext);
+  await applyImportsToDom(componentDom, componentDataWithId, componentContext);
 
   // Apply plugins only to the root component
   if (!context.isDescendantComponent) {

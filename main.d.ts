@@ -1,9 +1,12 @@
 export interface ComponentSettings {
-  data: Record<string, unknown>;
-  imports: Record<string, string>;
-  plugins: {
-    tailwindcss?: Record<string, unknown>;
-  };
+  context?: Record<string, unknown>;
+  overrides?: Record<string, Record<string, unknown>>;
+}
+
+export interface ComponentEntity {
+  componentTemplate: string;
+  componentSettings?: ComponentSettings;
+  componentScript?: string;
 }
 
 export interface GetComponentFromFsOptions {
@@ -13,27 +16,17 @@ export interface GetComponentFromFsOptions {
   };
 }
 
-export declare function getComponentFromFs(
-  componentDir: string,
-  options?: GetComponentFromFsOptions
-): Promise<{
-  componentSettings: ComponentSettings;
-  componentTemplate: string;
-  componentEnhancements?: string;
-}>;
+export declare type GetComponentFunction<Options extends GetComponentOptions> =
+  (componentUri: string, options?: Options) => Promise<ComponentEntity>;
+
+export declare const getComponentFromFs: GetComponentFunction<GetComponentFromFsOptions>;
 
 export declare function renderComponent<GetComponentOptions>(
   componentUri: string,
   customData: Record<string, unknown> | null | undefined,
   context: {
     componentSettings?: ComponentSettings;
-    getComponent(
-      componentUri: string,
-      options?: GetComponentOptions
-    ): Promise<{
-      componentSettings: ComponentSettings;
-      componentTemplate: string;
-    }>;
+    getComponent: GetComponentFunction;
     getComponentOptions?: GetComponentOptions;
     isDescendantComponent?: boolean;
     renderComponent?: typeof renderComponent;
