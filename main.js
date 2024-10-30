@@ -248,8 +248,8 @@ async function applyGlobalsToDom(dom, data, renderingOptions) {
 
   globalDom.window.document.head.append(...dom.window.document.head.children);
 
-  dom.window.document.body.innerHTML = globalDom.window.document.body.innerHTML;
-  dom.window.document.head.innerHTML = globalDom.window.document.head.innerHTML;
+  dom.window.document.body.outerHTML = globalDom.window.document.body.outerHTML;
+  dom.window.document.head.outerHTML = globalDom.window.document.head.outerHTML;
 }
 
 async function applyPluginsToDom(dom) {
