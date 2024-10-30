@@ -82,9 +82,12 @@ function applyDataToDomElement(domElement, data, renderingOptions) {
 }
 
 function applyDataToDomElementAttributes(domElement, data, renderingOptions) {
-  const isImportedElement = Object.keys(
-    renderingOptions.componentSettings.imports
-  ).some((importKey) => importKey.toUpperCase() === domElement.tagName);
+  const imports = Array.from(domElement.querySelectorAll("meta[rel=element]"));
+
+  const isImportedElement = imports.some(
+    (metaImport) =>
+      metaImport.getAttribute("as").toUpperCase() === domElement.tagName
+  );
 
   const attributes = Array.from(domElement.attributes || []);
 
@@ -128,38 +131,16 @@ function getNestedValue(obj, path) {
   return path?.split(".").reduce((acc, key) => acc?.[key], obj);
 }
 
-async function applyGlobalsToDom(dom, data, renderingOptions) {
-  if (renderingOptions.descendant) {
-    return;
-  }
-
-  const globalRendering = await renderingOptions.renderComponent(
-    "global",
-    data,
-    { ...renderingOptions, descendant: true }
+async function applyImportsToDom(dom, data, renderingOptions) {
+  const imports = Array.from(
+    dom.window.document.querySelectorAll("meta[rel=element]")
   );
 
-  const globalDom = new JSDOM(globalRendering);
-
-  const childrenSlots =
-    globalDom.window.document.querySelectorAll("slot:not([name])");
-
-  for (const childrenSlot of childrenSlots) {
-    childrenSlot.replaceWith(...dom.window.document.body.childNodes);
-  }
-
-  globalDom.window.document.head.append(...dom.window.document.head.children);
-
-  dom.window.document.body.innerHTML = globalDom.window.document.body.innerHTML;
-  dom.window.document.head.innerHTML = globalDom.window.document.head.innerHTML;
-}
-
-async function applyImportsToDom(dom, data, renderingOptions) {
-  for (const importKey in renderingOptions.componentSettings.imports) {
-    const importUri = renderingOptions.componentSettings.imports[importKey];
+  for (const metaImport of imports) {
+    const importUri = metaImport.getAttribute("href");
 
     const importedElements = dom.window.document.querySelectorAll(
-      importKey.toLowerCase()
+      metaImport.getAttribute("as").toLowerCase()
     );
 
     for (const importedElement of importedElements) {
@@ -240,11 +221,51 @@ async function applyImportsToDom(dom, data, renderingOptions) {
   }
 }
 
-async function applyPluginsToDom(dom, settings) {
-  if (settings.plugins.tailwindcss) {
+async function applyGlobalsToDom(dom, data, renderingOptions) {
+  const globalRendering = await renderingOptions.renderComponent(
+    "global",
+    data,
+    { ...renderingOptions, descendant: true }
+  );
+
+  const globalDom = new JSDOM(globalRendering);
+
+  const childrenSlots =
+    globalDom.window.document.querySelectorAll("slot:not([name])");
+
+  for (const childrenSlot of childrenSlots) {
+    childrenSlot.replaceWith(...dom.window.document.body.childNodes);
+  }
+
+  globalDom.window.document.head.append(...dom.window.document.head.children);
+
+  dom.window.document.body.innerHTML = globalDom.window.document.body.innerHTML;
+  dom.window.document.head.innerHTML = globalDom.window.document.head.innerHTML;
+}
+
+async function applyPluginsToDom(dom) {
+  const metaTailwind = dom.window.document.querySelector(
+    "meta[itemprop=tailwind]"
+  );
+
+  if (!metaTailwind || metaTailwind.getAttribute("content") === "true") {
+    const metaTailwindPreflight = dom.window.document.querySelector(
+      "meta[itemprop=tailwind-preflight]"
+    );
+
+    const preset =
+      !metaTailwindPreflight ||
+      metaTailwindPreflight.getAttribute("content") === "true"
+        ? {}
+        : {
+            corePlugins: {
+              preflight: false,
+            },
+          };
+
     const css = await postcss([
       tailwindcss({
-        presets: [settings.plugins.tailwindcss],
+        presets: [preset],
         content: [{ raw: dom.serialize() }],
       }),
     ]).process(tailwindCssAtRules);
@@ -357,7 +378,7 @@ exports.renderComponent = async function renderComponent(
 
   const {
     componentTemplate,
-    componentSettings = { context: {}, imports: {}, plugins: {} }, // TODO Remove default value
+    componentSettings = { context: {} },
     componentScript,
   } = await renderingOptions.getComponent(
     componentUri,
@@ -384,11 +405,16 @@ exports.renderComponent = async function renderComponent(
     componentContext
   );
 
-  await applyGlobalsToDom(componentDom, componentDataWithId, componentContext);
   await applyImportsToDom(componentDom, componentDataWithId, componentContext);
 
   if (!renderingOptions.descendant) {
-    await applyPluginsToDom(componentDom, componentSettings);
+    await applyGlobalsToDom(
+      componentDom,
+      componentDataWithId,
+      componentContext
+    );
+
+    await applyPluginsToDom(componentDom);
 
     if (!componentDom.window.document.querySelector("meta[charset]")) {
       const metaCharset = componentDom.window.document.createElement("meta");
