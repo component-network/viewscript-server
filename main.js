@@ -431,11 +431,15 @@ exports.renderComponent = async function renderComponent(
   await applyImportsToDom(componentDom, componentDataWithId, componentContext);
 
   if (!renderingOptions.descendant) {
-    await applyGlobalsToDom(
-      componentDom,
-      componentDataWithId,
-      componentContext
-    );
+    // For now, only apply globals to DOM if we are getting components from the file system
+    // TODO Think of a better way to handle this for non-FS components
+    if (renderingOptions.getComponent === exports.getComponentFromFs) {
+      await applyGlobalsToDom(
+        componentDom,
+        componentDataWithId,
+        componentContext
+      );
+    }
 
     await applyPluginsToDom(componentDom);
 
