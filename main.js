@@ -82,11 +82,13 @@ function applyDataToDomElement(domElement, data, renderingOptions) {
 }
 
 function applyDataToDomElementAttributes(domElement, data, renderingOptions) {
-  const imports = Array.from(domElement.querySelectorAll("meta[rel=element]"));
+  const linkElements = Array.from(
+    domElement.querySelectorAll("link[rel=element]")
+  );
 
-  const isImportedElement = imports.some(
-    (metaImport) =>
-      metaImport.getAttribute("as").toUpperCase() === domElement.tagName
+  const isImportedElement = linkElements.some(
+    (linkElement) =>
+      linkElement.getAttribute("as").toUpperCase() === domElement.tagName
   );
 
   const attributes = Array.from(domElement.attributes || []);
@@ -132,25 +134,32 @@ function getNestedValue(obj, path) {
 }
 
 async function applyImportsToDom(dom, data, renderingOptions) {
-  const imports = Array.from(
-    dom.window.document.querySelectorAll("meta[rel=element]")
+  const linkElements = Array.from(
+    dom.window.document.querySelectorAll("link[rel=element]")
   );
 
-  for (const metaImport of imports) {
-    const importUri = metaImport.getAttribute("href");
-
+  for (const linkElement of linkElements) {
     const importedElements = dom.window.document.querySelectorAll(
-      metaImport.getAttribute("as").toLowerCase()
+      linkElement.getAttribute("as").toLowerCase()
     );
+
+    linkElement.remove();
 
     for (const importedElement of importedElements) {
       const importAttributes = Array.from(importedElement.attributes).reduce(
         (result, attribute) => {
-          result[attribute.name] = JSON.parse(attribute.value);
+          // result[attribute.name] = JSON.parse(attribute.value);
+          result[attribute.name] = attribute.value;
           return result;
         },
         {}
       );
+
+      let importUri = linkElement.getAttribute("href");
+
+      if (importUri.endsWith(".html")) {
+        importUri = importUri.slice(0, -5);
+      }
 
       const importRendering = await renderingOptions.renderComponent(
         importUri,
@@ -223,7 +232,7 @@ async function applyImportsToDom(dom, data, renderingOptions) {
 
 async function applyGlobalsToDom(dom, data, renderingOptions) {
   const globalRendering = await renderingOptions.renderComponent(
-    "global",
+    "/global",
     data,
     { ...renderingOptions, descendant: true }
   );
@@ -273,6 +282,14 @@ async function applyPluginsToDom(dom) {
     const style = dom.window.document.createElement("style");
     style.textContent = css;
     dom.window.document.head.appendChild(style);
+
+    if (metaTailwindPreflight) {
+      metaTailwindPreflight.remove();
+    }
+  }
+
+  if (metaTailwind) {
+    metaTailwind.remove();
   }
 }
 
@@ -316,7 +333,7 @@ exports.getComponentFromFs = async function getComponentFromFs(
   componentPath,
   options = {}
 ) {
-  const { basePath = "", cacheOptions = {} } = options;
+  const { basePath = "", currentPath = "", cacheOptions = {} } = options;
 
   if (!cacheOptions.disabled) {
     const cachedComponent = getComponentFromFsCache.get(componentPath);
@@ -330,9 +347,22 @@ exports.getComponentFromFs = async function getComponentFromFs(
     }
   }
 
-  const templateFilePath = resolve(basePath, `${componentPath}.html`);
-  const scriptFilePath = resolve(basePath, `${componentPath}.ts`);
-  const settingsFilePath = resolve(basePath, `${componentPath}.yaml`);
+  const relativePath = componentPath.startsWith("/") ? basePath : currentPath;
+
+  const settledComponentPath = componentPath.startsWith("/")
+    ? componentPath.slice(1)
+    : componentPath;
+
+  const templateFilePath = resolve(
+    relativePath,
+    `${settledComponentPath}.html`
+  );
+
+  const scriptFilePath = resolve(relativePath, `${settledComponentPath}.ts`);
+  const settingsFilePath = resolve(
+    relativePath,
+    `${settledComponentPath}.yaml`
+  );
 
   const [componentTemplate, componentScript, componentSettingsRaw] =
     await Promise.all([
@@ -382,7 +412,7 @@ exports.renderComponent = async function renderComponent(
     componentScript,
   } = await renderingOptions.getComponent(
     componentUri,
-    renderingOptions.getComponentOptions
+    renderingOptions.getComponentOptions // TODO Pass in currentPath here
   );
 
   const componentDom = new JSDOM(componentTemplate);
