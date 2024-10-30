@@ -403,7 +403,7 @@ exports.renderComponent = async function renderComponent(
 
   const {
     componentTemplate,
-    componentSettings = { context: {} },
+    componentSettings = { context: {}, overrides: {} },
     componentScript,
   } = await renderingOptions.getComponent(
     componentUri,
