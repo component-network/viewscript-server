@@ -248,28 +248,26 @@ async function applyGlobalsToDom(dom, data, renderingOptions) {
 }
 
 async function applyPluginsToDom(dom) {
-  const metaTailwind = dom.window.document.querySelector(
-    "meta[itemprop=tailwind]"
+  const metaSkipTailwind = dom.window.document.querySelector(
+    "meta[itemprop=skip-tailwind]"
   );
 
-  if (!metaTailwind || metaTailwind.getAttribute("content") === "true") {
-    const metaTailwindPreflight = dom.window.document.querySelector(
-      "meta[itemprop=tailwind-preflight]"
+  if (!metaSkipTailwind) {
+    const metaSkipTailwindPreflight = dom.window.document.querySelector(
+      "meta[itemprop=skip-tailwind-preflight]"
     );
 
-    const preset =
-      !metaTailwindPreflight ||
-      metaTailwindPreflight.getAttribute("content") === "true"
-        ? {}
-        : {
-            corePlugins: {
-              preflight: false,
-            },
-          };
+    const presets = [
+      {
+        corePlugins: {
+          preflight: !metaSkipTailwindPreflight,
+        },
+      },
+    ];
 
     const css = await postcss([
       tailwindcss({
-        presets: [preset],
+        presets,
         content: [{ raw: dom.serialize() }],
       }),
     ]).process(tailwindCssAtRules);
@@ -278,13 +276,13 @@ async function applyPluginsToDom(dom) {
     style.textContent = css;
     dom.window.document.head.appendChild(style);
 
-    if (metaTailwindPreflight) {
-      metaTailwindPreflight.remove();
+    if (metaSkipTailwindPreflight) {
+      metaSkipTailwindPreflight.remove();
     }
   }
 
-  if (metaTailwind) {
-    metaTailwind.remove();
+  if (metaSkipTailwind) {
+    metaSkipTailwind.remove();
   }
 }
 
