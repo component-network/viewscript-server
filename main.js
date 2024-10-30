@@ -161,13 +161,11 @@ async function applyImportsToDom(dom, data, renderingOptions) {
         importUri = importUri.slice(0, -5);
       }
 
-      const importRendering = await renderingOptions.renderComponent(
+      const importDom = await renderingOptions.renderComponent(
         importUri,
         { ...data, ...importAttributes },
         { ...renderingOptions, descendant: true }
       );
-
-      const importDom = new JSDOM(importRendering);
 
       const namedSlots =
         importDom.window.document.querySelectorAll("slot[name]");
@@ -231,13 +229,10 @@ async function applyImportsToDom(dom, data, renderingOptions) {
 }
 
 async function applyGlobalsToDom(dom, data, renderingOptions) {
-  const globalRendering = await renderingOptions.renderComponent(
-    "/global",
-    data,
-    { ...renderingOptions, descendant: true }
-  );
-
-  const globalDom = new JSDOM(globalRendering);
+  const globalDom = await renderingOptions.renderComponent("/global", data, {
+    ...renderingOptions,
+    descendant: true,
+  });
 
   const childrenSlots =
     globalDom.window.document.querySelectorAll("slot:not([name])");
@@ -472,12 +467,10 @@ exports.renderComponent = async function renderComponent(
     );
   }
 
-  const serializedDom = componentDom.serialize();
-
   console.log(
     `[viewscript-server] renderComponent    ${componentUri} with`,
     customContext
   );
 
-  return serializedDom;
+  return componentDom;
 };

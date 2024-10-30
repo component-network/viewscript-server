@@ -1,3 +1,4 @@
+import type { JSDOM } from "jsdom";
 import type { parse as YAMLparse } from "yaml";
 
 export type GetComponentFunction<T extends GetComponentOptions> = (
@@ -24,4 +25,4 @@ export function renderComponent<GetComponentOptions>(
     getComponent: GetComponentFunction;
     getComponentOptions?: GetComponentOptions;
   }
-): Promise<string>;
+): Promise<JSDOM>;
