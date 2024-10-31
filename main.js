@@ -14,6 +14,9 @@ const renderComponentCache = new Map();
 const tailwindCssAtRules =
   "@tailwind base; @tailwind components; @tailwind utilities;";
 
+const emptyScript =
+  '"use strict";\nObject.defineProperty(exports, "__esModule", { value: true });\n';
+
 function applyDataToDomElement(domElement, data, renderingOptions) {
   // Repeat elements with a use-for attribute
   const repeaters = domElement.querySelectorAll("[use-for]");
@@ -148,6 +151,7 @@ async function applyImportsToDom(dom, data, renderingOptions) {
     for (const importedElement of importedElements) {
       const importAttributes = Array.from(importedElement.attributes).reduce(
         (result, attribute) => {
+          // TODO Do we ever need to JSON.parse the attribute values? Like so:
           // result[attribute.name] = JSON.parse(attribute.value);
           result[attribute.name] = attribute.value;
           return result;
@@ -273,9 +277,11 @@ async function applyScriptToDom(dom, enhancements, componentId, componentData) {
       compilerOptions: { module: typescript.ModuleKind.None },
     });
 
-    if (compiledScript.outputText) {
+    if (
+      compiledScript.outputText &&
+      compiledScript.outputText !== emptyScript
+    ) {
       const scriptElement = dom.window.document.createElement("script");
-
       scriptElement.id = componentId;
 
       const minifiedScript = await minify(`
@@ -290,17 +296,19 @@ globalThis.ViewScript.components["${componentId}"]
     }
   }
 
-  const scriptElement = dom.window.document.createElement("script");
-  const scriptData = JSON.stringify(componentData);
+  if (dom.window[componentId]) {
+    const scriptElement = dom.window.document.createElement("script");
+    const scriptData = JSON.stringify(componentData);
 
-  const minifiedScript = await minify(`
+    const minifiedScript = await minify(`
 addEventListener("load", function () {
 new (globalThis.ViewScript.components["${componentId}"].default)(${scriptData});
 });`);
 
-  scriptElement.textContent = minifiedScript.code;
-  scriptElement.className = componentId;
-  dom.window.document.head.appendChild(scriptElement);
+    scriptElement.textContent = minifiedScript.code;
+    scriptElement.className = componentId;
+    dom.window.document.head.appendChild(scriptElement);
+  }
 }
 
 exports.getComponentFromFs = async function getComponentFromFs(
@@ -386,7 +394,7 @@ exports.renderComponent = async function renderComponent(
     componentScript,
   } = await renderingOptions.getComponent(
     componentUri,
-    renderingOptions.getComponentOptions // TODO Pass in currentPath here
+    renderingOptions.getComponentOptions // TODO Pass in currentPath here, to enable relative imports
   );
 
   const componentDom = new JSDOM(componentTemplate);
@@ -409,11 +417,7 @@ exports.renderComponent = async function renderComponent(
     componentContext
   );
 
-  await applyImportsToDom(componentDom, componentDataWithId, componentContext);
-
   if (!renderingOptions.descendant) {
-    await applyPluginsToDom(componentDom);
-
     if (!componentDom.window.document.querySelector("meta[charset]")) {
       const metaCharset = componentDom.window.document.createElement("meta");
       metaCharset.setAttribute("charset", "utf-8");
@@ -429,6 +433,12 @@ exports.renderComponent = async function renderComponent(
       );
       componentDom.window.document.head.appendChild(metaViewport);
     }
+  }
+
+  await applyImportsToDom(componentDom, componentDataWithId, componentContext);
+
+  if (!renderingOptions.descendant) {
+    await applyPluginsToDom(componentDom);
   }
 
   if (componentScript) {
