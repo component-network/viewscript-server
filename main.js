@@ -228,25 +228,6 @@ async function applyImportsToDom(dom, data, renderingOptions) {
   }
 }
 
-async function applyGlobalsToDom(dom, data, renderingOptions) {
-  const globalDom = await renderingOptions.renderComponent("/global", data, {
-    ...renderingOptions,
-    descendant: true,
-  });
-
-  const childrenSlots =
-    globalDom.window.document.querySelectorAll("slot:not([name])");
-
-  for (const childrenSlot of childrenSlots) {
-    childrenSlot.replaceWith(...dom.window.document.body.childNodes);
-  }
-
-  globalDom.window.document.head.append(...dom.window.document.head.children);
-
-  dom.window.document.body.outerHTML = globalDom.window.document.body.outerHTML;
-  dom.window.document.head.outerHTML = globalDom.window.document.head.outerHTML;
-}
-
 async function applyPluginsToDom(dom) {
   const metaSkipTailwind = dom.window.document.querySelector(
     "meta[itemprop=skip-tailwind]"
@@ -431,16 +412,6 @@ exports.renderComponent = async function renderComponent(
   await applyImportsToDom(componentDom, componentDataWithId, componentContext);
 
   if (!renderingOptions.descendant) {
-    // For now, only apply globals to DOM if we are getting components from the file system
-    // TODO Think of a better way to handle this for non-FS components
-    if (renderingOptions.getComponent === exports.getComponentFromFs) {
-      await applyGlobalsToDom(
-        componentDom,
-        componentDataWithId,
-        componentContext
-      );
-    }
-
     await applyPluginsToDom(componentDom);
 
     if (!componentDom.window.document.querySelector("meta[charset]")) {
