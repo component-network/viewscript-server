@@ -18,17 +18,17 @@ const emptyScript =
   '"use strict";\nObject.defineProperty(exports, "__esModule", { value: true });\n';
 
 function applyDataToDomElement(domElement, data, renderingOptions) {
-  // Repeat elements with a use-for attribute
-  const repeaters = domElement.querySelectorAll("[use-for]");
+  // Repeat elements with a used-for attribute
+  const repeaters = domElement.querySelectorAll("[used-for]");
 
   for (const repeater of repeaters) {
     const [itemName, collectionName] = repeater
-      .getAttribute("use-for")
+      .getAttribute("used-for")
       .split(" in ");
 
     const collectionData = getNestedValue(data, collectionName);
 
-    repeater.removeAttribute("use-for");
+    repeater.removeAttribute("used-for");
 
     for (const item of collectionData) {
       const clonedElement = repeater.cloneNode(true);
@@ -45,11 +45,11 @@ function applyDataToDomElement(domElement, data, renderingOptions) {
     repeater.remove();
   }
 
-  // Remove elements with a use-if attribute that evaluates to false
-  const conditionals = domElement.querySelectorAll("[use-if]");
+  // Remove elements with a used-if attribute that evaluates to false
+  const conditionals = domElement.querySelectorAll("[used-if]");
 
   for (const conditional of conditionals) {
-    const conditionalName = conditional.getAttribute("use-if");
+    const conditionalName = conditional.getAttribute("used-if");
     const inverted = conditionalName.startsWith("!");
 
     const boundConditionalName = inverted
@@ -59,7 +59,7 @@ function applyDataToDomElement(domElement, data, renderingOptions) {
     const conditionalValue = getNestedValue(data, boundConditionalName);
 
     if ((conditionalValue && !inverted) || (!conditionalValue && inverted)) {
-      conditional.removeAttribute("use-if");
+      conditional.removeAttribute("used-if");
     } else {
       conditional.remove();
     }

@@ -10,16 +10,18 @@ export type GetComponentFunction<T extends GetComponentOptions> = (
   componentSettings?: ReturnType<typeof YAMLparse>;
 }>;
 
-export const getComponentFromFs: GetComponentFunction<{
+export interface GetComponentFromFsOptions {
   basePath?: string;
   cacheOptions?: {
     disabled?: boolean;
   };
-}>;
+}
+
+export const getComponentFromFs: GetComponentFunction<GetComponentFromFsOptions>;
 
 export function renderComponent<GetComponentOptions>(
   componentUri: string,
-  customContext: Record<string, unknown> | null | undefined,
+  customContext: Record<string, any> | null | undefined,
   renderingOptions: {
     descendant?: boolean;
     getComponent: GetComponentFunction;
