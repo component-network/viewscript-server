@@ -388,20 +388,17 @@ exports.renderComponent = async function renderComponent(
     renderComponentCache.set(componentUri, componentMetadata);
   }
 
-  const {
-    componentTemplate,
-    componentSettings = { context: {}, overrides: {} },
-    componentScript,
-  } = await renderingOptions.getComponent(
-    componentUri,
-    renderingOptions.getComponentOptions // TODO Pass in currentPath here, to enable relative imports
-  );
+  const { componentTemplate, componentSettings, componentScript } =
+    await renderingOptions.getComponent(
+      componentUri,
+      renderingOptions.getComponentOptions // TODO Pass in currentPath here, to enable relative imports
+    );
 
   const componentDom = new JSDOM(componentTemplate);
 
   const componentDataWithId = {
     id: randomUUID(),
-    ...structuredClone(componentSettings.context),
+    ...structuredClone(componentSettings?.context ?? {}),
     ...customContext,
   };
 
